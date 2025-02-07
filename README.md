@@ -23,7 +23,26 @@ Antes de instalar a CLI, certifique-se de ter:
 
 3. **kubectl**
    - Necessário para interagir com o cluster
-   - Será configurado automaticamente pelo comando `init`
+   - Será instalado automaticamente pelo script de instalação se não estiver presente
+   - Se preferir instalar manualmente:
+     - Linux: 
+       ```bash
+       curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+       sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+       ```
+     - MacOS:
+       ```bash
+       brew install kubectl
+       ```
+     - Windows:
+       ```bash
+       choco install kubernetes-cli
+       ```
+   - Verifique a instalação:
+     ```bash
+     kubectl version --client
+     ```
+   - A configuração do kubectl será feita automaticamente pelo comando `init`
 
 4. **Acesso ao cluster EKS da Jera**
    - Você precisa ter acesso ao AWS SSO da Jera

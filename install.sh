@@ -55,6 +55,43 @@ check_aws_cli() {
     fi
 }
 
+# Verifica se o kubectl está instalado
+check_kubectl() {
+    if ! command -v kubectl &> /dev/null; then
+        echo -e "${YELLOW}⚠️  kubectl não encontrado. Instalando...${NC}"
+        
+        # Detecta o sistema operacional
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            # Linux
+            echo -e "${YELLOW}📦 Baixando kubectl para Linux...${NC}"
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+            rm -f kubectl
+            
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS
+            echo -e "${YELLOW}📦 Instalando kubectl via Homebrew...${NC}"
+            brew install kubectl
+            
+        else
+            echo -e "${RED}❌ Sistema operacional não suportado para instalação automática do kubectl.${NC}"
+            echo -e "${YELLOW}Por favor, instale manualmente seguindo:${NC}"
+            echo -e "https://kubernetes.io/docs/tasks/tools/install-kubectl/"
+            exit 1
+        fi
+        
+        # Verifica se a instalação foi bem sucedida
+        if command -v kubectl &> /dev/null; then
+            echo -e "${GREEN}✅ kubectl instalado com sucesso!${NC}"
+        else
+            echo -e "${RED}❌ Falha ao instalar kubectl.${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}✅ kubectl já está instalado.${NC}"
+    fi
+}
+
 # Define o diretório de instalação
 INSTALL_DIR="/opt/jera-cli"
 WRAPPER_SCRIPT="/usr/local/bin/jeracli"
@@ -79,6 +116,9 @@ fi
 
 # Verifica e instala o AWS CLI se necessário
 check_aws_cli
+
+# Verifica e instala o kubectl se necessário
+check_kubectl
 
 # Cria diretório de instalação
 echo -e "${YELLOW}📁 Criando diretório de instalação...${NC}"
