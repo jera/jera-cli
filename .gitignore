@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Ambientes virtuais
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs e editores
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Arquivos de configuração local
+.jera/
+.aws/
+.kube/
+
+# Logs e arquivos temporários
+*.log
+*.tmp
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Arquivos de build
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Documentação gerada
+docs/_build/
+site/
+
+# Arquivos específicos do sistema
+Thumbs.db
+.DS_Store
+Desktop.ini
