@@ -32,12 +32,14 @@ def cli(ctx):
     ⚡ Configuração:
       init          Configura AWS SSO e kubectl para o cluster
       use          Define o namespace atual para operações
+      login-aws    Faz login no AWS SSO de forma interativa
     
     📊 Visualização:
       pods         Lista todos os pods no namespace atual
       namespaces   Lista todos os namespaces disponíveis com status
       metrics      Mostra uso de CPU e memória dos pods
       url          Mostra informações dos Ingresses (hosts, endereços, portas)
+      describe     Mostra informações detalhadas de um pod (status, eventos, secrets)
     
     🔍 Operações em Pods:
       logs         Visualiza logs de um pod (com opção de follow)
@@ -47,13 +49,15 @@ def cli(ctx):
     Fluxo básico de uso:
     
     1. Configure suas credenciais:
-        $ jeracli init
+        $ jeracli login-aws    # Faz login no SSO
+        $ jeracli init         # Configura o kubectl
     
     2. Selecione um namespace:
         $ jeracli use production
     
     3. Gerencie seus recursos:
         $ jeracli pods            # Lista pods
+        $ jeracli describe        # Vê detalhes do pod
         $ jeracli logs           # Vê logs (interativo)
         $ jeracli metrics        # Monitora recursos
         $ jeracli exec meu-pod   # Acessa o pod
@@ -559,16 +563,18 @@ def exec(pod_name=None):
         console.print(f"❌ Erro ao executar shell no pod: {str(e)}", style="bold red")
 
 @cli.command()
-@click.argument('pod_name')
+@click.argument('pod_name', required=False)
 @click.option('--force', '-f', is_flag=True, help='Força a deleção do pod sem aguardar a finalização graciosa')
-def delete(pod_name, force):
-    """Deleta um pod específico do namespace atual.
+@click.option('--all', '-a', is_flag=True, help='Deleta todos os pods do namespace atual')
+def delete(pod_name, force, all):
+    """Deleta um pod específico ou todos os pods do namespace atual.
     
-    Solicita confirmação antes de deletar o pod para evitar
+    Solicita confirmação antes de deletar o(s) pod(s) para evitar
     exclusões acidentais.
     
     Opções:
         -f, --force    Força a deleção do pod sem aguardar a finalização graciosa
+        -a, --all      Deleta todos os pods do namespace atual
     
     Requer que um namespace tenha sido selecionado usando 'jeracli use'.
     
@@ -576,6 +582,8 @@ def delete(pod_name, force):
         $ jeracli delete meu-pod            # Deleção normal
         $ jeracli delete meu-pod --force    # Força a deleção
         $ jeracli delete meu-pod -f         # Força a deleção (forma curta)
+        $ jeracli delete --all              # Deleta todos os pods
+        $ jeracli delete --all --force      # Força a deleção de todos os pods
     """
     try:
         # Load saved namespace
@@ -588,8 +596,54 @@ def delete(pod_name, force):
         if not namespace:
             console.print("❌ Namespace não definido. Use 'jeracli use <namespace>' primeiro.", style="bold red")
             return
+
+        # Se --all foi especificado, deleta todos os pods
+        if all:
+            # Get list of pods using kubectl
+            result = subprocess.run(
+                ["kubectl", "get", "pods", "-n", namespace, "-o", "name"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            pod_names = [pod.replace('pod/', '') for pod in result.stdout.strip().split('\n') if pod]
+            
+            if not pod_names:
+                console.print("❌ Nenhum pod encontrado no namespace atual.", style="bold red")
+                return
+
+            # Confirm deletion
+            message = f"Tem certeza que deseja {'[bold red]FORÇAR[/] ' if force else ''}deletar [bold red]TODOS[/] os pods do namespace [bold cyan]{namespace}[/]?"
+            questions = [
+                inquirer.Confirm('confirm',
+                               message=message,
+                               default=False)
+            ]
+            answers = inquirer.prompt(questions)
+            
+            if answers and answers['confirm']:
+                for pod_name in pod_names:
+                    cmd = ["kubectl", "delete", "pod", "-n", namespace]
+                    
+                    if force:
+                        cmd.extend(["--force", "--grace-period=0"])
+                        console.print(f"🚨 [bold red]Forçando[/] a deleção do pod {pod_name}...", style="yellow")
+                    else:
+                        console.print(f"🗑️ Deletando pod {pod_name}...", style="yellow")
+                    
+                    cmd.append(pod_name)
+                    subprocess.run(cmd, check=True)
+                
+                console.print(f"\n✅ Todos os pods do namespace [bold cyan]{namespace}[/] foram deletados com sucesso!", style="bold green")
+            return
+
+        # Se não especificou --all mas também não especificou um pod
+        if not pod_name:
+            console.print("❌ Especifique um pod para deletar ou use --all para deletar todos.", style="bold red")
+            return
         
-        # Confirm deletion
+        # Confirm deletion of single pod
         message = f"Tem certeza que deseja {'[bold red]FORÇAR[/] ' if force else ''}deletar o pod {pod_name}?"
         questions = [
             inquirer.Confirm('confirm',
@@ -612,7 +666,7 @@ def delete(pod_name, force):
             
             console.print(f"✅ Pod {pod_name} deletado com sucesso!", style="bold green")
     except Exception as e:
-        console.print(f"❌ Erro ao deletar pod: {str(e)}", style="bold red")
+        console.print(f"❌ Erro ao deletar pod(s): {str(e)}", style="bold red")
 
 @cli.command()
 def namespaces():
@@ -1336,6 +1390,61 @@ def describe(pod_name=None):
             console.print()
             console.print(volume_table)
         
+        # Secrets
+        secrets = []
+        
+        # Procura secrets nos volumes
+        if pod.spec.volumes:
+            for volume in pod.spec.volumes:
+                if hasattr(volume, 'secret') and volume.secret:
+                    secrets.append({
+                        'nome': volume.secret.secret_name,
+                        'tipo': 'Volume',
+                        'montagem': volume.name,
+                        'opcional': str(volume.secret.optional or False)
+                    })
+        
+        # Procura secrets nas env vars dos containers
+        for container in pod.spec.containers:
+            if container.env:
+                for env in container.env:
+                    if env.value_from and env.value_from.secret_key_ref:
+                        secrets.append({
+                            'nome': env.value_from.secret_key_ref.name,
+                            'tipo': 'Env',
+                            'montagem': f"{container.name}:{env.name}",
+                            'opcional': str(env.value_from.secret_key_ref.optional or False)
+                        })
+            
+            # Procura secrets em envFrom
+            if container.env_from:
+                for env_from in container.env_from:
+                    if env_from.secret_ref:
+                        secrets.append({
+                            'nome': env_from.secret_ref.name,
+                            'tipo': 'EnvFrom',
+                            'montagem': container.name,
+                            'opcional': str(env_from.secret_ref.optional or False)
+                        })
+        
+        if secrets:
+            secrets_table = Table(show_header=True, header_style="bold magenta", title="\n🔒 Secrets")
+            secrets_table.add_column("Nome", style="cyan")
+            secrets_table.add_column("Tipo", style="yellow")
+            secrets_table.add_column("Montagem", style="green")
+            secrets_table.add_column("Opcional", style="blue")
+            
+            for secret in secrets:
+                secrets_table.add_row(
+                    secret['nome'],
+                    secret['tipo'],
+                    secret['montagem'],
+                    secret['opcional']
+                )
+            
+            console.print()
+            console.print(secrets_table)
+        
         # Eventos
         console.print("\n🔔 [bold]Eventos Recentes:[/]")
         events = v1.list_namespaced_event(
@@ -1384,6 +1493,138 @@ def describe(pod_name=None):
         
     except Exception as e:
         console.print(f"❌ Erro ao obter detalhes do pod: {str(e)}", style="bold red")
+
+@cli.command()
+def nodes():
+    """Lista todos os nós do cluster.
+    
+    Mostra uma tabela com informações sobre cada nó:
+    - Nome do nó
+    - Status (Ready/NotReady)
+    - Roles (control-plane, worker)
+    - Versão do Kubernetes
+    - CPU (total/usado)
+    - Memória (total/usada)
+    - Idade
+    
+    Exemplo:
+        $ jeracli nodes
+    """
+    try:
+        # Carrega a configuração do kubernetes
+        config.load_kube_config()
+        v1 = client.CoreV1Api()
+        
+        # Cria uma tabela rica para exibir os nós
+        table = Table(title="🖥️  Nós do Cluster", show_header=True)
+        table.add_column("Nome", style="cyan")
+        table.add_column("Status", style="green")
+        table.add_column("Roles", style="yellow")
+        table.add_column("Versão", style="blue")
+        table.add_column("CPU", justify="right")
+        table.add_column("Memória", justify="right")
+        table.add_column("Idade", style="magenta", justify="right")
+        
+        # Lista os nós
+        nodes = v1.list_node()
+        
+        for node in nodes.items:
+            # Status
+            status = "✅ Ready" if any(cond.type == "Ready" and cond.status == "True" for cond in node.status.conditions) else "❌ NotReady"
+            
+            # Roles
+            roles = []
+            for label, value in node.metadata.labels.items():
+                if label.startswith("node-role.kubernetes.io/"):
+                    role = label.split("/")[1]
+                    roles.append(role)
+            roles_str = ", ".join(roles) if roles else "worker"
+            
+            # Versão do Kubernetes
+            version = node.status.node_info.kubelet_version
+            
+            # Recursos (CPU e Memória)
+            allocatable_cpu = node.status.allocatable.get('cpu', 'N/A')
+            allocatable_memory = node.status.allocatable.get('memory', 'N/A')
+            if allocatable_memory != 'N/A':
+                # Converte de Ki para Gi
+                memory_gi = int(allocatable_memory.replace('Ki', '')) / (1024 * 1024)
+                memory_str = f"{memory_gi:.1f}Gi"
+            else:
+                memory_str = 'N/A'
+            
+            # Calcula a idade do nó
+            creation_time = node.metadata.creation_timestamp
+            age = time.time() - creation_time.timestamp()
+            if age < 3600:  # menos de 1 hora
+                age_str = f"{int(age/60)}m"
+            elif age < 86400:  # menos de 1 dia
+                age_str = f"{int(age/3600)}h"
+            else:
+                age_str = f"{int(age/86400)}d"
+            
+            # Adiciona a linha na tabela
+            table.add_row(
+                node.metadata.name,
+                status,
+                roles_str,
+                version,
+                str(allocatable_cpu),
+                memory_str,
+                age_str
+            )
+        
+        # Mostra a tabela
+        console.print()
+        console.print(table)
+        console.print()
+        
+        # Tenta obter métricas de uso dos nós
+        try:
+            metrics_table = Table(title="📊 Uso de Recursos", show_header=True)
+            metrics_table.add_column("Nome", style="cyan")
+            metrics_table.add_column("CPU %", style="green", justify="right")
+            metrics_table.add_column("CPU", style="green", justify="right")
+            metrics_table.add_column("Memória %", style="yellow", justify="right")
+            metrics_table.add_column("Memória", style="yellow", justify="right")
+            
+            # Obtém métricas usando kubectl top nodes
+            result = subprocess.run(
+                ["kubectl", "top", "nodes"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            # Processa a saída
+            lines = result.stdout.strip().split('\n')[1:]  # Pula o cabeçalho
+            for line in lines:
+                parts = line.split()
+                if len(parts) >= 5:
+                    node_name = parts[0]
+                    cpu = parts[1]
+                    cpu_percent = parts[2]
+                    memory = parts[3]
+                    memory_percent = parts[4]
+                    
+                    metrics_table.add_row(
+                        node_name,
+                        cpu_percent,
+                        cpu,
+                        memory_percent,
+                        memory
+                    )
+            
+            console.print(metrics_table)
+            console.print()
+            
+        except subprocess.CalledProcessError as e:
+            if "Metrics API not available" in str(e):
+                console.print("\n⚠️  Metrics API não está disponível para mostrar o uso de recursos.", style="yellow")
+                console.print("Para habilitar, instale o metrics-server no cluster.", style="dim")
+            
+    except Exception as e:
+        console.print(f"❌ Erro ao listar nós: {str(e)}", style="bold red")
 
 if __name__ == '__main__':
     cli() 

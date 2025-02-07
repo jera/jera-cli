@@ -256,10 +256,14 @@ Abre um shell interativo dentro do pod.
 ### Deletar Pod
 
 ```bash
-jeracli delete <pod>
+jeracli delete <pod> [--force]
+jeracli delete --all [--force]
 ```
-Remove um pod do cluster.
+Remove um pod específico ou todos os pods do cluster.
 - Solicita confirmação antes de deletar
+- Opções:
+  - `--force, -f`: Força a deleção do pod sem aguardar a finalização graciosa
+  - `--all, -a`: Deleta todos os pods do namespace atual
 - Requer que um namespace tenha sido selecionado
 
 ### Ver Métricas dos Pods
@@ -282,28 +286,29 @@ jeracli metrics production         # Seleciona pod do namespace interativamente
 jeracli metrics production pod-123 # Mostra recursos do pod específico
 ```
 
-### Ver URLs dos Ingresses
+### Ver Detalhes do Pod
 
 ```bash
-jeracli url [namespace] [ingress]
+jeracli describe [pod]
 ```
-Mostra informações dos Ingresses em um formato similar ao `kubectl get ingress`.
-- Se o namespace não for fornecido, apresenta uma lista interativa
-- Mostra:
-  - Nome do Ingress
-  - Hosts configurados
-  - Endereço do LoadBalancer
-  - Portas disponíveis (80/443)
-  - Idade do Ingress
+Mostra informações detalhadas de um pod.
+- Se o pod não for fornecido, apresenta uma lista interativa
+- Mostra informações como:
+  - Status detalhado e condições
+  - Labels e anotações
+  - Informações dos containers
+  - Volumes montados
+  - Secrets utilizadas (volumes, env vars, envFrom)
+  - Eventos recentes
+- Requer que um namespace tenha sido selecionado
 
 Exemplos:
 ```bash
-jeracli url                      # Seleciona namespace interativamente
-jeracli url production           # Mostra todos os Ingresses do namespace
-jeracli url production meu-app   # Mostra Ingress específico
+jeracli describe              # Seleciona pod interativamente
+jeracli describe meu-pod      # Mostra detalhes do pod especificado
 ```
 
-### Ver Ingresses
+### Login no AWS SSO
 
 ```bash
 jeracli login-aws
@@ -325,3 +330,37 @@ Dicas:
 - Mais simples que o `aws sso login`
 - Configuração automática na primeira vez
 - Seleção interativa de profiles
+
+### Ver URLs dos Ingresses
+
+```bash
+jeracli url [namespace] [ingress]
+```
+Mostra informações dos Ingresses em um formato similar ao `kubectl get ingress`.
+- Se o namespace não for fornecido, apresenta uma lista interativa
+- Mostra:
+  - Nome do Ingress
+  - Hosts configurados
+  - Endereço do LoadBalancer
+  - Portas disponíveis (80/443)
+  - Idade do Ingress
+
+Exemplos:
+```bash
+jeracli url                      # Seleciona namespace interativamente
+jeracli url production           # Mostra todos os Ingresses do namespace
+jeracli url production meu-app   # Mostra Ingress específico
+```
+
+### Ver Nós do Cluster
+
+```bash
+jeracli nodes
+```
+Lista todos os nós do cluster com informações detalhadas:
+- Nome e status do nó (Ready/NotReady)
+- Roles (control-plane, worker)
+- Versão do Kubernetes
+- Recursos disponíveis (CPU/Memória)
+- Uso atual de recursos (requer metrics-server)
+- Idade do nó
