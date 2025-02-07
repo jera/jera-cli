@@ -2,6 +2,33 @@
 
 Uma CLI simplificada para gerenciar recursos da Jera na AWS.
 
+## Pré-requisitos
+
+Antes de instalar a CLI, certifique-se de ter:
+
+1. **Python 3.8+**
+   ```bash
+   python --version
+   ```
+
+2. **AWS CLI**
+   - É necessário ter o AWS CLI instalado e configurado
+   - Instalação:
+     - Linux/MacOS: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+     - Windows: https://aws.amazon.com/cli/
+   - Verifique a instalação:
+     ```bash
+     aws --version
+     ```
+
+3. **kubectl**
+   - Necessário para interagir com o cluster
+   - Será configurado automaticamente pelo comando `init`
+
+4. **Acesso ao cluster EKS da Jera**
+   - Você precisa ter acesso ao AWS SSO da Jera
+   - As credenciais serão configuradas durante o `init`
+
 ## Instalação
 
 ```bash
@@ -14,6 +41,35 @@ O script de instalação irá:
 3. Configurar um ambiente virtual isolado para as dependências
 
 Nota: O script solicitará sua senha sudo para criar o comando global.
+
+## Configuração Inicial
+
+Após a instalação, você precisa configurar o acesso:
+
+1. **Verifique o AWS CLI**:
+   ```bash
+   aws --version
+   ```
+   Se não estiver instalado, instale seguindo os links acima.
+
+2. **Configure o AWS SSO**:
+   ```bash
+   aws configure sso
+   ```
+   - SSO start URL: https://jera.awsapps.com/start
+   - SSO Region: us-east-1
+   - CLI default client Region: us-east-1
+   - CLI default output format: json
+   - CLI profile name: seu-nome
+
+3. **Inicialize a CLI**:
+   ```bash
+   jeracli init
+   ```
+   Este comando irá:
+   - Verificar a instalação do AWS CLI
+   - Configurar o acesso ao AWS SSO
+   - Configurar o kubectl para o cluster
 
 ## Desenvolvimento
 
@@ -137,13 +193,6 @@ Após a instalação, você pode verificar se está tudo funcionando corretament
 jeracli --version
 ```
 
-## Pré-requisitos
-
-- Python 3.8+
-- AWS CLI configurado
-- kubectl instalado
-- Acesso ao cluster EKS da Jera
-
 ## Comandos Disponíveis
 
 ### Inicialização
@@ -256,4 +305,23 @@ jeracli url production meu-app   # Mostra Ingress específico
 
 ### Ver Ingresses
 
+```bash
+jeracli login-aws
 ```
+Faz login no AWS SSO de forma interativa.
+
+Se for a primeira vez:
+1. Configura o AWS SSO com as informações da Jera
+2. Solicita um nome para o profile
+3. Abre o navegador para autenticação
+
+Se já estiver configurado:
+1. Lista os profiles disponíveis
+2. Permite selecionar qual usar
+3. Renova o login no navegador
+
+Dicas:
+- Use este comando quando sua sessão expirar
+- Mais simples que o `aws sso login`
+- Configuração automática na primeira vez
+- Seleção interativa de profiles

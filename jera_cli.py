@@ -190,13 +190,34 @@ def init():
     Verifica se você tem uma sessão AWS SSO ativa e configura o kubectl
     para acessar o cluster EKS da Jera.
     
-    Se você não tiver uma sessão ativa, o comando mostrará instruções
-    sobre como configurar o AWS SSO e fazer login.
+    Requisitos:
+    - AWS CLI instalado (aws --version)
+    - Credenciais SSO configuradas (aws configure sso)
+    - Acesso ao cluster EKS da Jera
+    
+    Se você não tiver o AWS CLI instalado, instale-o primeiro:
+    - Linux/MacOS: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+    - Windows: https://aws.amazon.com/cli/
     
     Exemplo:
         $ jeracli init
     """
     try:
+        # Verifica se o AWS CLI está instalado
+        try:
+            result = subprocess.run(["aws", "--version"], capture_output=True, text=True)
+            if result.returncode != 0:
+                raise Exception("AWS CLI não encontrado")
+        except:
+            console.print("\n❌ AWS CLI não está instalado!", style="bold red")
+            console.print("\n📝 Para instalar o AWS CLI:", style="bold yellow")
+            console.print("1. Linux/MacOS:", style="dim")
+            console.print("   https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html")
+            console.print("\n2. Windows:", style="dim")
+            console.print("   https://aws.amazon.com/cli/")
+            console.print("\nInstale o AWS CLI e tente novamente.", style="bold yellow")
+            return
+
         # Verifica se tem uma sessão AWS ativa
         if not check_aws_sso_session():
             console.print("\n⚠️  Você não tem uma sessão AWS SSO ativa!", style="bold yellow")
@@ -318,6 +339,7 @@ def pods():
     - Nome do pod
     - Status atual
     - IP do pod
+    - Idade do pod (tempo desde a criação)
     
     Requer que um namespace tenha sido selecionado usando 'jeracli use'.
     
@@ -346,12 +368,27 @@ def pods():
         table.add_column("Nome do Pod")
         table.add_column("Status")
         table.add_column("IP")
+        table.add_column("Idade")
         
         for pod in pods.items:
+            # Calcula a idade do pod
+            creation_time = pod.metadata.creation_timestamp
+            age = time.time() - creation_time.timestamp()
+            
+            if age < 60:  # menos de 1 minuto
+                age_str = f"{int(age)}s"
+            elif age < 3600:  # menos de 1 hora
+                age_str = f"{int(age/60)}m"
+            elif age < 86400:  # menos de 1 dia
+                age_str = f"{int(age/3600)}h"
+            else:
+                age_str = f"{int(age/86400)}d"
+            
             table.add_row(
                 pod.metadata.name,
                 pod.status.phase,
-                pod.status.pod_ip or "N/A"
+                pod.status.pod_ip or "N/A",
+                age_str
             )
         
         console.print(table)
@@ -970,6 +1007,367 @@ def ingress(namespace=None):
         
     except Exception as e:
         console.print(f"❌ Erro ao obter Ingresses: {str(e)}", style="bold red")
+
+@cli.command(name="login-aws")
+def login_aws():
+    """Faz login no AWS SSO de forma interativa.
+    
+    Guia o usuário pelo processo de login no AWS SSO da Jera,
+    verificando a configuração e abrindo o navegador para autenticação.
+    
+    Se for a primeira vez:
+    1. Configura o AWS SSO com as informações da Jera
+    2. Faz login no navegador
+    
+    Se já estiver configurado:
+    1. Apenas renova o login
+    
+    Exemplo:
+        $ jeracli login-aws
+    """
+    try:
+        # Verifica se o AWS CLI está instalado
+        try:
+            result = subprocess.run(["aws", "--version"], capture_output=True, text=True)
+            if result.returncode != 0:
+                raise Exception("AWS CLI não encontrado")
+        except:
+            console.print("\n❌ AWS CLI não está instalado!", style="bold red")
+            console.print("\n📝 Para instalar o AWS CLI:", style="bold yellow")
+            console.print("1. Linux/MacOS:", style="dim")
+            console.print("   https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html")
+            console.print("\n2. Windows:", style="dim")
+            console.print("   https://aws.amazon.com/cli/")
+            console.print("\nInstale o AWS CLI e tente novamente.", style="bold yellow")
+            return
+
+        # Verifica se já existe configuração do SSO
+        if not check_aws_sso_config():
+            console.print("\n📝 Configurando AWS SSO pela primeira vez...", style="bold blue")
+            
+            # Configura o SSO com valores padrão da Jera
+            questions = [
+                inquirer.Text('profile',
+                            message="Digite o nome do seu profile (ex: seu-nome)",
+                            validate=lambda _, x: len(x) >= 2)
+            ]
+            answers = inquirer.prompt(questions)
+            
+            if not answers:
+                return
+                
+            profile = answers['profile']
+            
+            # Cria o diretório .aws se não existir
+            aws_dir = os.path.expanduser("~/.aws")
+            os.makedirs(aws_dir, exist_ok=True)
+            
+            # Cria/atualiza a configuração
+            config_file = os.path.join(aws_dir, "config")
+            with open(config_file, 'a') as f:
+                f.write(f"\n[profile {profile}]\n")
+                f.write("sso_start_url = https://jera.awsapps.com/start\n")
+                f.write("sso_region = us-east-1\n")
+                f.write("sso_account_id = ACCOUNT_ID\n")  # Substitua pelo ID da conta
+                f.write("sso_role_name = AdministratorAccess\n")
+                f.write("region = us-east-1\n")
+                f.write("output = json\n")
+            
+            console.print(f"\n✅ Profile [bold green]{profile}[/] configurado!", style="bold")
+            
+            # Faz o login
+            console.print("\n🔑 Iniciando login no AWS SSO...", style="bold blue")
+            subprocess.run(["aws", "sso", "login", "--profile", profile])
+            
+        else:
+            # Lista os profiles disponíveis
+            result = subprocess.run(
+                ["aws", "configure", "list-profiles"],
+                capture_output=True,
+                text=True
+            )
+            profiles = result.stdout.strip().split('\n')
+            
+            # Permite selecionar o profile
+            questions = [
+                inquirer.List('profile',
+                             message="Selecione o profile para login",
+                             choices=profiles,
+                             )
+            ]
+            answers = inquirer.prompt(questions)
+            
+            if answers:
+                profile = answers['profile']
+                console.print(f"\n🔑 Fazendo login com o profile [bold green]{profile}[/]...", style="bold blue")
+                subprocess.run(["aws", "sso", "login", "--profile", profile])
+            
+        console.print("\n✅ Login realizado com sucesso!", style="bold green")
+        
+    except Exception as e:
+        console.print(f"\n❌ Erro ao fazer login: {str(e)}", style="bold red")
+        if "The SSO session has expired" in str(e):
+            console.print("A sessão SSO expirou. Tente novamente.", style="yellow")
+
+@cli.command()
+@click.argument('pod_name', required=False)
+def describe(pod_name=None):
+    """Mostra informações detalhadas de um pod.
+    
+    Se o nome do pod não for fornecido, apresenta uma lista interativa
+    de pods disponíveis. Mostra informações detalhadas como:
+    - Labels e anotações
+    - Status detalhado
+    - Eventos recentes
+    - Volumes montados
+    - Condições atuais
+    - Informações do container
+    
+    Requer que um namespace tenha sido selecionado usando 'jeracli use'.
+    
+    Exemplos:
+        $ jeracli describe              # Seleciona pod interativamente
+        $ jeracli describe meu-pod      # Mostra detalhes do pod especificado
+    """
+    try:
+        # Load saved namespace
+        config_path = os.path.expanduser('~/.jera/config')
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                config_data = yaml.safe_load(f)
+                namespace = config_data.get('namespace')
+        
+        if not namespace:
+            console.print("❌ Namespace não definido. Use 'jeracli use <namespace>' primeiro.", style="bold red")
+            return
+
+        # Get list of pods using kubectl
+        result = subprocess.run(
+            ["kubectl", "get", "pods", "-n", namespace, "-o", "name"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        pod_names = [pod.replace('pod/', '') for pod in result.stdout.strip().split('\n') if pod]
+        
+        if not pod_names:
+            console.print("❌ Nenhum pod encontrado no namespace atual.", style="bold red")
+            return
+        
+        selected_pod = pod_name
+        
+        # Se não foi fornecido um nome de pod, mostra a lista interativa
+        if not selected_pod:
+            questions = [
+                inquirer.List('pod',
+                             message="Selecione um pod para ver os detalhes",
+                             choices=pod_names,
+                             )
+            ]
+            answers = inquirer.prompt(questions)
+            
+            if answers:
+                selected_pod = answers['pod']
+            else:
+                return
+        
+        # Verifica se o pod existe
+        if selected_pod not in pod_names:
+            console.print(f"❌ Pod '{selected_pod}' não encontrado no namespace {namespace}.", style="bold red")
+            return
+            
+        # Obtém os detalhes do pod
+        config.load_kube_config()
+        v1 = client.CoreV1Api()
+        pod = v1.read_namespaced_pod(selected_pod, namespace)
+        
+        # Cria tabelas para diferentes seções de informação
+        console.print(f"\n🔍 Detalhes do Pod [bold cyan]{selected_pod}[/] no namespace [bold green]{namespace}[/]", style="bold")
+        
+        # Informações Básicas
+        basic_table = Table(show_header=True, header_style="bold magenta", title="📋 Informações Básicas")
+        basic_table.add_column("Campo", style="cyan")
+        basic_table.add_column("Valor", style="yellow")
+        
+        basic_table.add_row("Nome", pod.metadata.name)
+        basic_table.add_row("Namespace", pod.metadata.namespace)
+        basic_table.add_row("Node", pod.spec.node_name or "N/A")
+        basic_table.add_row("IP do Pod", pod.status.pod_ip or "N/A")
+        basic_table.add_row("IP do Host", pod.status.host_ip or "N/A")
+        basic_table.add_row("QoS Class", pod.status.qos_class or "N/A")
+        
+        # Calcula a idade
+        creation_time = pod.metadata.creation_timestamp
+        age = time.time() - creation_time.timestamp()
+        if age < 60:  # menos de 1 minuto
+            age_str = f"{int(age)}s"
+        elif age < 3600:  # menos de 1 hora
+            age_str = f"{int(age/60)}m"
+        elif age < 86400:  # menos de 1 dia
+            age_str = f"{int(age/3600)}h"
+        else:
+            age_str = f"{int(age/86400)}d"
+        basic_table.add_row("Idade", age_str)
+        
+        console.print()
+        console.print(basic_table)
+        
+        # Labels
+        if pod.metadata.labels:
+            console.print("\n🏷️  [bold]Labels:[/]")
+            for key, value in pod.metadata.labels.items():
+                console.print(f"  • {key}: [yellow]{value}[/]")
+        
+        # Status e Condições
+        status_table = Table(show_header=True, header_style="bold magenta", title="\n📊 Status e Condições")
+        status_table.add_column("Tipo", style="cyan")
+        status_table.add_column("Status", style="yellow")
+        status_table.add_column("Última Transição", style="green")
+        
+        for condition in pod.status.conditions:
+            # Calcula o tempo desde a última transição
+            last_transition = condition.last_transition_time
+            if last_transition:
+                transition_age = time.time() - last_transition.timestamp()
+                if transition_age < 60:
+                    transition_str = f"{int(transition_age)}s"
+                elif transition_age < 3600:
+                    transition_str = f"{int(transition_age/60)}m"
+                elif transition_age < 86400:
+                    transition_str = f"{int(transition_age/3600)}h"
+                else:
+                    transition_str = f"{int(transition_age/86400)}d"
+            else:
+                transition_str = "N/A"
+            
+            status_table.add_row(
+                condition.type,
+                "✅" if condition.status == "True" else "❌",
+                transition_str
+            )
+        
+        console.print()
+        console.print(status_table)
+        
+        # Containers
+        for container in pod.spec.containers:
+            container_table = Table(
+                show_header=True,
+                header_style="bold magenta",
+                title=f"\n📦 Container: [bold cyan]{container.name}[/]"
+            )
+            container_table.add_column("Campo", style="cyan")
+            container_table.add_column("Valor", style="yellow")
+            
+            container_table.add_row("Image", container.image)
+            
+            # Recursos
+            if container.resources:
+                if container.resources.requests:
+                    for resource, value in container.resources.requests.items():
+                        container_table.add_row(f"Requests {resource}", str(value))
+                if container.resources.limits:
+                    for resource, value in container.resources.limits.items():
+                        container_table.add_row(f"Limits {resource}", str(value))
+            
+            # Status do container
+            container_status = next(
+                (status for status in pod.status.container_statuses
+                 if status.name == container.name),
+                None
+            )
+            if container_status:
+                container_table.add_row(
+                    "Ready",
+                    "✅" if container_status.ready else "❌"
+                )
+                container_table.add_row(
+                    "Restart Count",
+                    str(container_status.restart_count)
+                )
+                
+                # Estado atual
+                state = container_status.state
+                if state.running:
+                    container_table.add_row("Estado", "🟢 Running")
+                elif state.waiting:
+                    container_table.add_row("Estado", f"⏳ Waiting ({state.waiting.reason})")
+                elif state.terminated:
+                    container_table.add_row("Estado", f"⭕ Terminated ({state.terminated.reason})")
+            
+            console.print()
+            console.print(container_table)
+        
+        # Volumes
+        if pod.spec.volumes:
+            volume_table = Table(show_header=True, header_style="bold magenta", title="\n💾 Volumes")
+            volume_table.add_column("Nome", style="cyan")
+            volume_table.add_column("Tipo", style="yellow")
+            volume_table.add_column("Detalhes", style="green")
+            
+            for volume in pod.spec.volumes:
+                volume_type = next((k for k in volume.to_dict().keys() if k != 'name'), "N/A")
+                volume_details = getattr(volume, volume_type, None)
+                details_str = str(volume_details) if volume_details else "N/A"
+                
+                volume_table.add_row(
+                    volume.name,
+                    volume_type,
+                    details_str
+                )
+            
+            console.print()
+            console.print(volume_table)
+        
+        # Eventos
+        console.print("\n🔔 [bold]Eventos Recentes:[/]")
+        events = v1.list_namespaced_event(
+            namespace,
+            field_selector=f'involvedObject.name={selected_pod}'
+        )
+        
+        if events.items:
+            event_table = Table(show_header=True, header_style="bold magenta")
+            event_table.add_column("Tipo", style="cyan", width=10)
+            event_table.add_column("Razão", style="yellow", width=20)
+            event_table.add_column("Idade", style="green", width=10)
+            event_table.add_column("De", style="blue", width=20)
+            event_table.add_column("Mensagem", style="white")
+            
+            for event in events.items:
+                # Calcula a idade do evento
+                event_time = event.last_timestamp or event.event_time
+                if event_time:
+                    event_age = time.time() - event_time.timestamp()
+                    if event_age < 60:
+                        age_str = f"{int(event_age)}s"
+                    elif event_age < 3600:
+                        age_str = f"{int(event_age/60)}m"
+                    elif event_age < 86400:
+                        age_str = f"{int(event_age/3600)}h"
+                    else:
+                        age_str = f"{int(event_age/86400)}d"
+                else:
+                    age_str = "N/A"
+                
+                event_table.add_row(
+                    event.type,
+                    event.reason,
+                    age_str,
+                    event.source.component,
+                    event.message
+                )
+            
+            console.print()
+            console.print(event_table)
+        else:
+            console.print("  Nenhum evento encontrado")
+        
+        console.print()  # Linha em branco no final
+        
+    except Exception as e:
+        console.print(f"❌ Erro ao obter detalhes do pod: {str(e)}", style="bold red")
 
 if __name__ == '__main__':
     cli() 

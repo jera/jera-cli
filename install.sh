@@ -15,6 +15,46 @@ if [ "$EUID" -ne 0 ]; then
     exit $?
 fi
 
+# Verifica se o AWS CLI está instalado
+check_aws_cli() {
+    if ! command -v aws &> /dev/null; then
+        echo -e "${YELLOW}⚠️  AWS CLI não encontrado. Instalando...${NC}"
+        
+        # Detecta o sistema operacional
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            # Linux
+            echo -e "${YELLOW}📦 Baixando AWS CLI para Linux...${NC}"
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            apt-get update && apt-get install -y unzip
+            unzip awscliv2.zip
+            ./aws/install
+            rm -rf aws awscliv2.zip
+            
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS
+            echo -e "${YELLOW}📦 Instalando AWS CLI via Homebrew...${NC}"
+            brew install awscli
+            
+        else
+            echo -e "${RED}❌ Sistema operacional não suportado para instalação automática do AWS CLI.${NC}"
+            echo -e "${YELLOW}Por favor, instale manualmente:${NC}"
+            echo -e "Windows: https://aws.amazon.com/cli/"
+            echo -e "Linux/MacOS: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html"
+            exit 1
+        fi
+        
+        # Verifica se a instalação foi bem sucedida
+        if command -v aws &> /dev/null; then
+            echo -e "${GREEN}✅ AWS CLI instalado com sucesso!${NC}"
+        else
+            echo -e "${RED}❌ Falha ao instalar AWS CLI.${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}✅ AWS CLI já está instalado.${NC}"
+    fi
+}
+
 # Define o diretório de instalação
 INSTALL_DIR="/opt/jera-cli"
 WRAPPER_SCRIPT="/usr/local/bin/jeracli"
@@ -36,6 +76,9 @@ if ! command -v pip &> /dev/null; then
     echo -e "${RED}❌ pip não encontrado. Por favor, instale o pip.${NC}"
     exit 1
 fi
+
+# Verifica e instala o AWS CLI se necessário
+check_aws_cli
 
 # Cria diretório de instalação
 echo -e "${YELLOW}📁 Criando diretório de instalação...${NC}"
@@ -75,4 +118,16 @@ chown $(logname):$(logname) "$WRAPPER_SCRIPT"
 echo -e "\n${GREEN}✅ Jera CLI instalada com sucesso!${NC}"
 echo -e "${YELLOW}O comando ${GREEN}jeracli${YELLOW} agora está disponível globalmente.${NC}"
 echo -e "\n${YELLOW}Para verificar a instalação:${NC}"
-echo -e "${GREEN}jeracli --version${NC}" 
+echo -e "${GREEN}jeracli --version${NC}"
+
+# Verifica se o AWS CLI precisa ser configurado
+if ! aws configure list &> /dev/null; then
+    echo -e "\n${YELLOW}⚠️  AWS CLI ainda não está configurado.${NC}"
+    echo -e "${YELLOW}Execute o comando abaixo para configurar:${NC}"
+    echo -e "${GREEN}aws configure sso${NC}"
+    echo -e "\nDicas de configuração:"
+    echo -e "- SSO start URL: https://jera.awsapps.com/start"
+    echo -e "- SSO Region: us-east-1"
+    echo -e "- CLI default client Region: us-east-1"
+    echo -e "- CLI default output format: json"
+fi 
