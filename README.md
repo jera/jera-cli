@@ -161,6 +161,8 @@ Este comando irá:
 jeracli use <namespace>
 ```
 Define o namespace atual para operações subsequentes.
+- Se o namespace não for fornecido, apresenta uma lista interativa
+- Salva o namespace selecionado para uso em outros comandos
 
 ### Listar Pods
 
@@ -168,43 +170,57 @@ Define o namespace atual para operações subsequentes.
 jeracli pods
 ```
 Lista todos os pods no namespace atual.
+- Mostra nome, status e IP de cada pod
+- Requer que um namespace tenha sido selecionado
 
 ### Listar Namespaces
 
 ```bash
 jeracli namespaces
 ```
-Lista todos os namespaces disponíveis no cluster, mostrando o nome, status e idade de cada um.
+Lista todos os namespaces disponíveis no cluster.
+- Mostra nome, status e idade de cada namespace
+- Formatação colorida para melhor visualização
 
 ### Ver Logs
 
 ```bash
-jeracli logs
+jeracli logs [pod] [-f] [-n N]
 ```
-Permite selecionar um pod e ver seus logs.
+Permite visualizar logs de um pod.
+- Se o pod não for fornecido, apresenta uma lista interativa
+- Opções:
+  - `-f, --follow`: Acompanha logs em tempo real
+  - `-n, --tail N`: Mostra as últimas N linhas
+- Requer que um namespace tenha sido selecionado
 
 ### Executar Shell em um Pod
 
 ```bash
-jeracli exec <nome-do-pod>
+jeracli exec <pod>
 ```
-Abre um shell interativo dentro do pod especificado.
+Abre um shell interativo dentro do pod.
+- Se o pod não for fornecido, apresenta uma lista interativa
+- Permite executar comandos dentro do container
+- Requer que um namespace tenha sido selecionado
 
 ### Deletar Pod
 
 ```bash
-jeracli delete <nome-do-pod>
+jeracli delete <pod>
 ```
-Deleta o pod especificado (com confirmação).
+Remove um pod do cluster.
+- Solicita confirmação antes de deletar
+- Requer que um namespace tenha sido selecionado
 
 ### Ver Métricas dos Pods
 
 ```bash
 jeracli metrics [namespace] [pod]
 ```
-Mostra o uso de CPU e memória dos pods em um namespace.
+Mostra o uso de CPU e memória dos pods.
 - Se o namespace não for fornecido, apresenta uma lista interativa
-- Se o pod não for fornecido, apresenta uma lista interativa dos pods do namespace
+- Se o pod não for fornecido, apresenta uma lista interativa
 - Opção de ver recursos de todos os pods ou de um pod específico
 - Requer o Metrics Server instalado no cluster
 - Mostra uma tabela com uso de CPU e memória
@@ -224,9 +240,12 @@ jeracli url [namespace] [ingress]
 ```
 Mostra informações dos Ingresses em um formato similar ao `kubectl get ingress`.
 - Se o namespace não for fornecido, apresenta uma lista interativa
-- Mostra nome, hosts, endereço e portas de cada Ingress
-- Indica a idade de cada Ingress
-- Similar ao comando `kubectl get ingress` mas com formatação melhorada
+- Mostra:
+  - Nome do Ingress
+  - Hosts configurados
+  - Endereço do LoadBalancer
+  - Portas disponíveis (80/443)
+  - Idade do Ingress
 
 Exemplos:
 ```bash

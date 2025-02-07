@@ -37,8 +37,7 @@ def cli(ctx):
       pods         Lista todos os pods no namespace atual
       namespaces   Lista todos os namespaces disponíveis com status
       metrics      Mostra uso de CPU e memória dos pods
-      url          Mostra a URL do LoadBalancer de um serviço
-      ingress      Mostra as URLs dos Ingresses
+      url          Mostra informações dos Ingresses (hosts, endereços, portas)
     
     🔍 Operações em Pods:
       logs         Visualiza logs de um pod (com opção de follow)
@@ -58,7 +57,7 @@ def cli(ctx):
         $ jeracli logs           # Vê logs (interativo)
         $ jeracli metrics        # Monitora recursos
         $ jeracli exec meu-pod   # Acessa o pod
-        $ jeracli ingress        # Ver URLs dos Ingresses
+        $ jeracli url            # Ver URLs dos Ingresses
     
     Use --help em qualquer comando para mais informações:
         $ jeracli init --help
