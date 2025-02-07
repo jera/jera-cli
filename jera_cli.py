@@ -560,17 +560,22 @@ def exec(pod_name=None):
 
 @cli.command()
 @click.argument('pod_name')
-def delete(pod_name):
+@click.option('--force', '-f', is_flag=True, help='Força a deleção do pod sem aguardar a finalização graciosa')
+def delete(pod_name, force):
     """Deleta um pod específico do namespace atual.
     
     Solicita confirmação antes de deletar o pod para evitar
     exclusões acidentais.
     
+    Opções:
+        -f, --force    Força a deleção do pod sem aguardar a finalização graciosa
+    
     Requer que um namespace tenha sido selecionado usando 'jeracli use'.
     
-    Exemplo:
-        $ jeracli delete meu-pod-com-erro
-        $ jeracli delete worker-pod-travado
+    Exemplos:
+        $ jeracli delete meu-pod            # Deleção normal
+        $ jeracli delete meu-pod --force    # Força a deleção
+        $ jeracli delete meu-pod -f         # Força a deleção (forma curta)
     """
     try:
         # Load saved namespace
@@ -585,15 +590,26 @@ def delete(pod_name):
             return
         
         # Confirm deletion
+        message = f"Tem certeza que deseja {'[bold red]FORÇAR[/] ' if force else ''}deletar o pod {pod_name}?"
         questions = [
             inquirer.Confirm('confirm',
-                           message=f"Tem certeza que deseja deletar o pod {pod_name}?",
+                           message=message,
                            default=False)
         ]
         answers = inquirer.prompt(questions)
         
         if answers and answers['confirm']:
-            subprocess.run(["kubectl", "delete", "pod", "-n", namespace, pod_name], check=True)
+            cmd = ["kubectl", "delete", "pod", "-n", namespace]
+            
+            if force:
+                cmd.extend(["--force", "--grace-period=0"])
+                console.print(f"🚨 [bold red]Forçando[/] a deleção do pod {pod_name}...", style="yellow")
+            else:
+                console.print(f"🗑️ Deletando pod {pod_name}...", style="yellow")
+            
+            cmd.append(pod_name)
+            subprocess.run(cmd, check=True)
+            
             console.print(f"✅ Pod {pod_name} deletado com sucesso!", style="bold green")
     except Exception as e:
         console.print(f"❌ Erro ao deletar pod: {str(e)}", style="bold red")
