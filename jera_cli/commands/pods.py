@@ -1,12 +1,14 @@
 import click
 from rich.console import Console
 from rich.table import Table
+from rich.live import Live
 import inquirer
 import yaml
 import os
 from kubernetes import client, config
 from ..utils.kubernetes import format_age, get_pod_metrics, parse_resource_value
 import subprocess
+import time
 
 console = Console()
 
@@ -19,8 +21,44 @@ def load_namespace():
             return config_data.get('namespace')
     return None
 
+def generate_pods_table(v1, namespace):
+    """Gera a tabela de pods para exibição"""
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Nome do Pod")
+    table.add_column("Ready", justify="center")
+    table.add_column("Status")
+    table.add_column("IP")
+    table.add_column("Idade")
+    
+    pods = v1.list_namespaced_pod(namespace)
+    
+    for pod in pods.items:
+        age_str = format_age(pod.metadata.creation_timestamp)
+        
+        # Calcula o status de Ready
+        ready_count = 0
+        container_count = len(pod.spec.containers)
+        for container_status in pod.status.container_statuses if pod.status.container_statuses else []:
+            if container_status.ready:
+                ready_count += 1
+        ready_status = f"{ready_count}/{container_count}"
+        
+        # Define o estilo baseado no status
+        ready_style = "green" if ready_count == container_count else "red"
+        
+        table.add_row(
+            pod.metadata.name,
+            f"[{ready_style}]{ready_status}[/{ready_style}]",
+            pod.status.phase,
+            pod.status.pod_ip or "N/A",
+            age_str
+        )
+    
+    return table
+
 @click.command()
-def pods():
+@click.option('-w', '--watch', is_flag=True, help='Atualiza a lista de pods em tempo real')
+def pods(watch):
     """Lista todos os pods no namespace atual."""
     try:
         namespace = load_namespace()
@@ -31,38 +69,20 @@ def pods():
         config.load_kube_config()
         v1 = client.CoreV1Api()
         
-        pods = v1.list_namespaced_pod(namespace)
-        
-        table = Table(show_header=True, header_style="bold magenta")
-        table.add_column("Nome do Pod")
-        table.add_column("Ready", justify="center")
-        table.add_column("Status")
-        table.add_column("IP")
-        table.add_column("Idade")
-        
-        for pod in pods.items:
-            age_str = format_age(pod.metadata.creation_timestamp)
+        if watch:
+            console.print(f"\n🔄 Monitorando pods no namespace [bold green]{namespace}[/]...", style="yellow")
+            console.print("Pressione Ctrl+C para parar\n", style="dim")
             
-            # Calcula o status de Ready
-            ready_count = 0
-            container_count = len(pod.spec.containers)
-            for container_status in pod.status.container_statuses if pod.status.container_statuses else []:
-                if container_status.ready:
-                    ready_count += 1
-            ready_status = f"{ready_count}/{container_count}"
+            with Live(generate_pods_table(v1, namespace), refresh_per_second=1) as live:
+                try:
+                    while True:
+                        live.update(generate_pods_table(v1, namespace))
+                        time.sleep(1)
+                except KeyboardInterrupt:
+                    console.print("\n✅ Monitoramento finalizado!", style="bold green")
+        else:
+            console.print(generate_pods_table(v1, namespace))
             
-            # Define o estilo baseado no status
-            ready_style = "green" if ready_count == container_count else "red"
-            
-            table.add_row(
-                pod.metadata.name,
-                f"[{ready_style}]{ready_status}[/{ready_style}]",
-                pod.status.phase,
-                pod.status.pod_ip or "N/A",
-                age_str
-            )
-        
-        console.print(table)
     except Exception as e:
         console.print(f"❌ Erro ao listar pods: {str(e)}", style="bold red")
 
