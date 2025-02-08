@@ -35,6 +35,7 @@ def pods():
         
         table = Table(show_header=True, header_style="bold magenta")
         table.add_column("Nome do Pod")
+        table.add_column("Ready", justify="center")
         table.add_column("Status")
         table.add_column("IP")
         table.add_column("Idade")
@@ -42,8 +43,20 @@ def pods():
         for pod in pods.items:
             age_str = format_age(pod.metadata.creation_timestamp)
             
+            # Calcula o status de Ready
+            ready_count = 0
+            container_count = len(pod.spec.containers)
+            for container_status in pod.status.container_statuses if pod.status.container_statuses else []:
+                if container_status.ready:
+                    ready_count += 1
+            ready_status = f"{ready_count}/{container_count}"
+            
+            # Define o estilo baseado no status
+            ready_style = "green" if ready_count == container_count else "red"
+            
             table.add_row(
                 pod.metadata.name,
+                f"[{ready_style}]{ready_status}[/{ready_style}]",
                 pod.status.phase,
                 pod.status.pod_ip or "N/A",
                 age_str
