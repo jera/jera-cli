@@ -18,11 +18,18 @@ fi
 # Define os diretórios
 INSTALL_DIR="/opt/jera-cli"
 WRAPPER_SCRIPT="/usr/local/bin/jeracli"
+JCLI_LINK="/usr/local/bin/jcli"
 
 # Remove o comando global
 if [ -f "$WRAPPER_SCRIPT" ]; then
-    echo -e "${YELLOW}🗑️  Removendo comando global...${NC}"
+    echo -e "${YELLOW}🗑️  Removendo comando global jeracli...${NC}"
     rm -f "$WRAPPER_SCRIPT"
+fi
+
+# Remove o link simbólico jcli
+if [ -L "$JCLI_LINK" ] || [ -f "$JCLI_LINK" ]; then
+    echo -e "${YELLOW}🗑️  Removendo link simbólico jcli...${NC}"
+    rm -f "$JCLI_LINK"
 fi
 
 # Remove o diretório de instalação

@@ -2,6 +2,8 @@
 
 Uma CLI simplificada para gerenciar recursos da Jera na AWS.
 
+> 💡 **Dica**: Além do comando `jeracli`, você também pode usar o comando mais curto `jcli`. Os dois comandos são idênticos e podem ser usados de forma intercambiável.
+
 ## Pré-requisitos
 
 Antes de instalar a CLI, certifique-se de ter:
@@ -13,6 +15,7 @@ Antes de instalar a CLI, certifique-se de ter:
 
 2. **AWS CLI**
    - É necessário ter o AWS CLI instalado e configurado
+   - Será instalado automaticamente pelo script de instalação se não estiver presente
    - Instalação:
      - Linux/MacOS: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
      - Windows: https://aws.amazon.com/cli/
@@ -129,16 +132,23 @@ pip install -e .
 
 ### 5. Estrutura do Projeto
 ```
-jera-cli/
-├── jera_cli.py      # Arquivo principal com a implementação da CLI
-├── setup.py         # Configuração do pacote e dependências
-├── install.sh       # Script de instalação global
-└── README.md        # Documentação
+jera_cli/
+├── __init__.py           # Exporta a CLI e define a versão
+├── __main__.py          # Ponto de entrada para execução direta do módulo
+├── cli.py               # Definição principal da CLI
+├── commands/            # Módulo com os comandos
+│   ├── __init__.py
+│   ├── config.py       # Comandos de configuração (init, use, login-aws)
+│   ├── metrics.py      # Comandos de métricas (pod-metrics, all-metrics)
+│   └── pods.py         # Comandos de pods (pods, logs, exec)
+└── utils/              # Módulo com funções utilitárias
+    ├── __init__.py
+    └── kubernetes.py   # Funções auxiliares para Kubernetes
 ```
 
 ### 6. Fazendo alterações
 
-1. Faça suas alterações no arquivo `jera_cli.py`
+1. Faça suas alterações nos arquivos apropriados dentro do pacote `jera_cli/`
 2. Teste localmente usando `python -m jera_cli [comando]`
 3. Para testar a instalação global, execute `./install.sh`
 
@@ -203,6 +213,36 @@ jera-cli/
 - Faça validações adequadas antes de executar operações
 - Mantenha a documentação atualizada
 - Teste todas as alterações antes de submeter
+
+### 7. Organização dos Comandos
+
+Os comandos da CLI estão organizados em módulos por categoria:
+
+1. **Comandos de Configuração** (`commands/config.py`):
+   - `init`: Configuração inicial do kubectl e AWS SSO
+   - `use`: Seleção de namespace
+   - `login-aws`: Login no AWS SSO
+
+2. **Comandos de Pods** (`commands/pods.py`):
+   - `pods`: Listagem de pods
+   - `logs`: Visualização de logs
+   - `exec`: Shell interativo em pods
+   - `delete`: Remoção de pods
+
+3. **Comandos de Métricas** (`commands/metrics.py`):
+   - `pod-metrics`: Análise de recursos por namespace
+   - `all-metrics`: Análise de recursos de todo o cluster
+
+4. **Utilitários** (`utils/kubernetes.py`):
+   - Funções auxiliares para Kubernetes
+   - Formatação de métricas e idade
+   - Verificação de configuração AWS
+
+Para adicionar um novo comando:
+1. Identifique o módulo apropriado em `commands/`
+2. Adicione sua função com o decorador `@click.command()`
+3. Registre o comando em `cli.py`
+4. Atualize a documentação se necessário
 
 ## Verificando a Instalação
 
@@ -285,24 +325,25 @@ Remove um pod específico ou todos os pods do cluster.
   - `--all, -a`: Deleta todos os pods do namespace atual
 - Requer que um namespace tenha sido selecionado
 
-### Ver Métricas dos Pods
+### Análise de Recursos
 
 ```bash
-jeracli metrics [namespace] [pod]
+jeracli resources [namespace]
 ```
-Mostra o uso de CPU e memória dos pods.
+Mostra uma análise detalhada dos recursos dos pods em um namespace.
 - Se o namespace não for fornecido, apresenta uma lista interativa
-- Se o pod não for fornecido, apresenta uma lista interativa
-- Opção de ver recursos de todos os pods ou de um pod específico
+- Exibe uma tabela com:
+  - Recursos alocados (requests/limits) para cada pod
+  - Recursos em uso atual
+  - Porcentagem de utilização (uso/alocado)
+  - Total de recursos do namespace
 - Requer o Metrics Server instalado no cluster
-- Mostra uma tabela com uso de CPU e memória
-- Calcula o total de recursos utilizados (quando vendo múltiplos pods)
+- Mostra um resumo final com totais de CPU e memória
 
 Exemplos:
 ```bash
-jeracli metrics                    # Seleciona namespace e pod interativamente
-jeracli metrics production         # Seleciona pod do namespace interativamente
-jeracli metrics production pod-123 # Mostra recursos do pod específico
+jeracli resources              # Seleciona namespace interativamente
+jeracli resources production   # Mostra recursos do namespace
 ```
 
 ### Ver Detalhes do Pod
@@ -383,3 +424,18 @@ Lista todos os nós do cluster com informações detalhadas:
 - Recursos disponíveis (CPU/Memória)
 - Uso atual de recursos (requer metrics-server)
 - Idade do nó
+
+### Análise Geral de Recursos
+
+```bash
+jeracli general-metrics
+```
+Mostra uma análise detalhada dos recursos de todos os pods em todos os namespaces.
+- Exibe uma tabela com:
+  - Recursos alocados (requests/limits) para cada pod
+  - Recursos em uso atual
+  - Porcentagem de utilização
+  - Total de recursos por namespace
+  - Total geral de todos os namespaces
+- Requer o Metrics Server instalado no cluster
+- Mostra um resumo final com totais de CPU e memória de todo o cluster

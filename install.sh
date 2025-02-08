@@ -92,9 +92,10 @@ check_kubectl() {
     fi
 }
 
-# Define o diretório de instalação
+# Define os diretórios
 INSTALL_DIR="/opt/jera-cli"
 WRAPPER_SCRIPT="/usr/local/bin/jeracli"
+ALIAS_SCRIPT="/usr/local/bin/jcli"
 
 # Verifica se python3 está instalado
 if ! command -v python3 &> /dev/null; then
@@ -120,6 +121,18 @@ check_aws_cli
 # Verifica e instala o kubectl se necessário
 check_kubectl
 
+# Remove o comando global
+if [ -f "$WRAPPER_SCRIPT" ]; then
+    echo -e "${YELLOW}🔄 Removendo instalação anterior...${NC}"
+    rm -f "$WRAPPER_SCRIPT"
+    rm -f "$ALIAS_SCRIPT"
+fi
+
+# Remove o diretório de instalação
+if [ -d "$INSTALL_DIR" ]; then
+    rm -rf "$INSTALL_DIR"
+fi
+
 # Cria diretório de instalação
 echo -e "${YELLOW}📁 Criando diretório de instalação...${NC}"
 mkdir -p "$INSTALL_DIR"
@@ -138,15 +151,21 @@ echo -e "${YELLOW}📦 Atualizando ferramentas de instalação...${NC}"
 pip install --upgrade pip setuptools wheel
 
 echo -e "${YELLOW}📦 Instalando dependências...${NC}"
-pip install -e .
+pip install --use-pep517 -e .
 
-# Cria o script wrapper
-echo -e "${YELLOW}📝 Criando comando global...${NC}"
-cat > "$WRAPPER_SCRIPT" << EOL
+# Cria o wrapper script
+cat > "$WRAPPER_SCRIPT" << 'EOF'
 #!/bin/bash
-source $INSTALL_DIR/.venv/bin/activate
-$INSTALL_DIR/.venv/bin/jeracli "\$@"
-EOL
+INSTALL_DIR="/opt/jera-cli"
+VENV="$INSTALL_DIR/.venv"
+
+# Ativa o ambiente virtual e executa o comando
+source "$VENV/bin/activate"
+python3 -m jera_cli "$@"
+EOF
+
+# Cria o link simbólico para o comando alternativo
+ln -s "$WRAPPER_SCRIPT" "$ALIAS_SCRIPT"
 
 # Torna o wrapper executável
 chmod +x "$WRAPPER_SCRIPT"
@@ -154,11 +173,13 @@ chmod +x "$WRAPPER_SCRIPT"
 # Ajusta as permissões
 chown -R $(logname):$(logname) "$INSTALL_DIR"
 chown $(logname):$(logname) "$WRAPPER_SCRIPT"
+chown -h $(logname):$(logname) "$ALIAS_SCRIPT"
 
 echo -e "\n${GREEN}✅ Jera CLI instalada com sucesso!${NC}"
-echo -e "${YELLOW}O comando ${GREEN}jeracli${YELLOW} agora está disponível globalmente.${NC}"
+echo -e "${YELLOW}Os comandos ${GREEN}jeracli${YELLOW} e ${GREEN}jcli${YELLOW} agora estão disponíveis globalmente.${NC}"
 echo -e "\n${YELLOW}Para verificar a instalação:${NC}"
 echo -e "${GREEN}jeracli --version${NC}"
+echo -e "${GREEN}jcli --version${NC}"
 
 # Verifica se o AWS CLI precisa ser configurado
 if ! aws configure list &> /dev/null; then
