@@ -198,4 +198,80 @@ def exec(pod_name=None):
             "--", "/bin/sh"
         ])
     except Exception as e:
-        console.print(f"❌ Erro ao executar shell no pod: {str(e)}", style="bold red") 
+        console.print(f"❌ Erro ao executar shell no pod: {str(e)}", style="bold red")
+
+@click.command(name="pods-by-node")
+@click.argument('namespace', required=False)
+def pods_by_node(namespace=None):
+    """Lista todos os pods agrupados por nó, opcionalmente filtrados por namespace."""
+    try:
+        config.load_kube_config()
+        v1 = client.CoreV1Api()
+        
+        # Se nenhum namespace for especificado, busca todos os namespaces
+        if not namespace:
+            console.print("\n🔄 Listando pods em todos os namespaces por nó...", style="yellow")
+            pods = v1.list_pod_for_all_namespaces()
+        else:
+            console.print(f"\n🔄 Listando pods no namespace [bold green]{namespace}[/] por nó...", style="yellow")
+            pods = v1.list_namespaced_pod(namespace)
+        
+        # Agrupa pods por nó
+        nodes_pods = {}
+        for pod in pods.items:
+            node_name = pod.spec.node_name or "Não atribuído"
+            pod_namespace = pod.metadata.namespace
+            
+            # Calcula o tempo de vida do pod
+            start_time = pod.status.start_time
+            if start_time:
+                lifetime = format_age(start_time)
+            else:
+                lifetime = "N/A"
+            
+            if node_name not in nodes_pods:
+                nodes_pods[node_name] = []
+            
+            nodes_pods[node_name].append({
+                'name': pod.metadata.name,
+                'namespace': pod_namespace,
+                'status': pod.status.phase,
+                'ready': f"{sum(1 for status in pod.status.container_statuses if status.ready)}/{len(pod.spec.containers)}" if pod.status.container_statuses else "0/0",
+                'lifetime': lifetime
+            })
+        
+        # Cria a tabela
+        for node, node_pods in nodes_pods.items():
+            table = Table(title=f"📦 Pods no Nó: [bold cyan]{node}[/]", show_header=True)
+            table.add_column("Namespace", style="blue")
+            table.add_column("Nome do Pod", style="magenta")
+            table.add_column("Status", style="blue")
+            table.add_column("Ready", justify="center")
+            table.add_column("Tempo de Vida", justify="right", style="green")
+            
+            for pod in node_pods:
+                # Define o estilo do status
+                status_style = "green" if pod['status'] == "Running" else "yellow"
+                
+                # Define o estilo do ready
+                ready_parts = pod['ready'].split('/')
+                ready_style = "green" if ready_parts[0] == ready_parts[1] and ready_parts[1] != "0" else "red"
+                
+                table.add_row(
+                    pod['namespace'],
+                    pod['name'],
+                    f"[{status_style}]{pod['status']}[/{status_style}]",
+                    f"[{ready_style}]{pod['ready']}[/{ready_style}]",
+                    pod['lifetime']
+                )
+            
+            console.print()
+            console.print(table)
+        
+        # Resumo
+        console.print("\n📊 Resumo:", style="bold")
+        console.print(f"Total de Nós: [bold green]{len(nodes_pods)}[/]")
+        console.print(f"Total de Pods: [bold green]{sum(len(pods) for pods in nodes_pods.values())}[/]")
+        
+    except Exception as e:
+        console.print(f"❌ Erro ao listar pods por nó: {str(e)}", style="bold red") 

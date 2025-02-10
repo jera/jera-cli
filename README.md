@@ -439,3 +439,21 @@ Mostra uma análise detalhada dos recursos de todos os pods em todos os namespac
   - Total geral de todos os namespaces
 - Requer o Metrics Server instalado no cluster
 - Mostra um resumo final com totais de CPU e memória de todo o cluster
+
+### Listar Pods por Nó
+
+```bash
+jeracli pods-by-node [namespace]
+```
+Mostra todos os pods agrupados por nó.
+- Se nenhum namespace for especificado, lista pods de todos os namespaces
+- Se um namespace for fornecido, lista pods apenas desse namespace
+- Exibe pods de cada nó em uma tabela separada
+- Mostra namespace, nome, status, estado de ready e tempo de vida dos pods
+- Inclui um resumo com total de nós e pods
+
+Exemplos:
+```bash
+jeracli pods-by-node                # Lista pods de todos os namespaces
+jeracli pods-by-node production     # Lista pods do namespace production
+```
