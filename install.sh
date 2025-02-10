@@ -15,6 +15,130 @@ if [ "$EUID" -ne 0 ]; then
     exit $?
 fi
 
+# Função para instalar Python e pip no Ubuntu
+install_python_ubuntu() {
+    echo -e "${YELLOW}📦 Instalando Python 3.10+ no Ubuntu...${NC}"
+    
+    # Adiciona repositório para versões mais recentes do Python
+    apt-get update
+    apt-get install -y software-properties-common
+    add-apt-repository -y ppa:deadsnakes/ppa
+    apt-get update
+    
+    # Instala Python 3.10 e pip apenas se não estiverem instalados
+    if ! dpkg -s python3.10 &> /dev/null; then
+        apt-get install -y python3.10 python3.10-venv python3.10-dev
+        
+        # Define Python 3.10 como padrão
+        update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+        update-alternatives --set python3 /usr/bin/python3.10
+    else
+        echo -e "${GREEN}✅ Python 3.10 já está instalado.${NC}"
+    fi
+    
+    # Instala pacotes de desenvolvimento e pip
+    apt-get install -y python3-pip python3-dev python3-setuptools python3-wheel
+    
+    echo -e "${GREEN}✅ Pacotes de desenvolvimento Python instalados.${NC}"
+}
+
+# Função para instalar Python e pip no macOS
+install_python_macos() {
+    echo -e "${YELLOW}📦 Instalando Python 3.10+ no macOS via Homebrew...${NC}"
+    
+    # Verifica se o Homebrew está instalado
+    if ! command -v brew &> /dev/null; then
+        echo -e "${YELLOW}🍺 Instalando Homebrew...${NC}"
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+    
+    # Instala Python 3.10 apenas se não estiver instalado
+    if ! brew list python@3.10 &> /dev/null; then
+        brew install python@3.10
+        
+        # Adiciona ao PATH
+        echo 'export PATH="/usr/local/opt/python@3.10/bin:$PATH"' >> ~/.zshrc
+        echo 'export PATH="/usr/local/opt/python@3.10/bin:$PATH"' >> ~/.bash_profile
+        
+        # Recarrega o shell
+        source ~/.zshrc
+        source ~/.bash_profile
+    else
+        echo -e "${GREEN}✅ Python 3.10 já está instalado via Homebrew.${NC}"
+    fi
+    
+    # Instala pacotes de desenvolvimento
+    brew install python-setuptools python-wheel
+    
+    echo -e "${GREEN}✅ Pacotes de desenvolvimento Python instalados.${NC}"
+}
+
+# Função para verificar e instalar Python
+check_python() {
+    # Verifica se Python 3.8+ está instalado
+    if ! command -v python3 &> /dev/null; then
+        echo -e "${YELLOW}⚠️  Python 3 não encontrado. Instalando...${NC}"
+        
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            # Linux (Ubuntu)
+            install_python_ubuntu
+            
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS
+            install_python_macos
+            
+        else
+            echo -e "${RED}❌ Sistema operacional não suportado para instalação automática do Python.${NC}"
+            echo -e "${YELLOW}Por favor, instale manualmente o Python 3.8+.${NC}"
+            exit 1
+        fi
+    fi
+    
+    # Verifica a versão do Python de forma mais robusta
+    PYTHON_MAJOR=$(python3 -c 'import sys; print(sys.version_info.major)')
+    PYTHON_MINOR=$(python3 -c 'import sys; print(sys.version_info.minor)')
+    
+    # Verifica se a versão é maior ou igual a 3.8
+    if [[ $PYTHON_MAJOR -lt 3 ]] || [[ $PYTHON_MAJOR -eq 3 && $PYTHON_MINOR -lt 8 ]]; then
+        echo -e "${RED}❌ Python ${PYTHON_MAJOR}.${PYTHON_MINOR} não é suportado. Instale Python 3.8+.${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✅ Python ${PYTHON_MAJOR}.${PYTHON_MINOR} verificado com sucesso!${NC}"
+}
+
+# Função para verificar e instalar pip
+check_pip() {
+    if ! command -v pip3 &> /dev/null; then
+        echo -e "${YELLOW}⚠️  pip não encontrado. Instalando...${NC}"
+        
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            # Linux (Ubuntu)
+            apt-get install -y python3-pip python3-setuptools
+            
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS
+            brew install python-pip
+            
+        else
+            echo -e "${RED}❌ Sistema operacional não suportado para instalação automática do pip.${NC}"
+            echo -e "${YELLOW}Por favor, instale manualmente o pip.${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}✅ pip já está instalado.${NC}"
+    fi
+    
+    # Usa pip do sistema para atualizar
+    python3 -m pip install --upgrade pip setuptools wheel
+    
+    echo -e "${GREEN}✅ pip e pacotes básicos atualizados com sucesso!${NC}"
+}
+
+# Chama as funções de verificação e instalação
+check_python
+check_pip
+
 # Verifica se o AWS CLI está instalado
 check_aws_cli() {
     if ! command -v aws &> /dev/null; then
@@ -96,24 +220,6 @@ check_kubectl() {
 INSTALL_DIR="/opt/jera-cli"
 WRAPPER_SCRIPT="/usr/local/bin/jeracli"
 ALIAS_SCRIPT="/usr/local/bin/jcli"
-
-# Verifica se python3 está instalado
-if ! command -v python3 &> /dev/null; then
-    echo -e "${RED}❌ Python 3 não encontrado. Por favor, instale o Python 3.8 ou superior.${NC}"
-    exit 1
-fi
-
-# Verifica a versão do Python
-PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-if (( $(echo "$PYTHON_VERSION >= 3.12" | bc -l) )); then
-    echo -e "${YELLOW}⚠️  Python 3.12 detectado. Garantindo compatibilidade...${NC}"
-fi
-
-# Verifica se pip está instalado
-if ! command -v pip &> /dev/null; then
-    echo -e "${RED}❌ pip não encontrado. Por favor, instale o pip.${NC}"
-    exit 1
-fi
 
 # Verifica e instala o AWS CLI se necessário
 check_aws_cli
