@@ -27,7 +27,8 @@ def generate_pods_table(v1, namespace):
     table.add_column("Nome do Pod")
     table.add_column("Ready", justify="center")
     table.add_column("Status")
-    table.add_column("IP")
+    table.add_column("Pod IP")
+    table.add_column("Nó IP", style="green")
     table.add_column("Idade")
     
     pods = v1.list_namespaced_pod(namespace)
@@ -46,11 +47,17 @@ def generate_pods_table(v1, namespace):
         # Define o estilo baseado no status
         ready_style = "green" if ready_count == container_count else "red"
         
+        # Obtém o IP do nó
+        node_ip = "N/A"
+        if pod.status.host_ip:
+            node_ip = pod.status.host_ip
+        
         table.add_row(
             pod.metadata.name,
             f"[{ready_style}]{ready_status}[/{ready_style}]",
             pod.status.phase,
             pod.status.pod_ip or "N/A",
+            node_ip,
             age_str
         )
     
