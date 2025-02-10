@@ -2,7 +2,7 @@
 
 import click
 from rich.console import Console
-from .commands.pods import pods, logs, exec, pods_by_node
+from .commands.pods import pods, logs, exec, pods_by_node, describe
 from .commands.metrics import pod_metrics, all_metrics
 from .commands.config import init, use, login_aws
 from .commands.nodes import nodes
@@ -74,6 +74,7 @@ cli.add_command(pod_metrics)
 cli.add_command(all_metrics)
 cli.add_command(nodes)
 cli.add_command(pods_by_node)
+cli.add_command(describe)
 
 if __name__ == '__main__':
     cli() 
