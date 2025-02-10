@@ -233,7 +233,10 @@ Os comandos da CLI estão organizados em módulos por categoria:
    - `pod-metrics`: Análise de recursos por namespace
    - `all-metrics`: Análise de recursos de todo o cluster
 
-4. **Utilitários** (`utils/kubernetes.py`):
+4. **Comandos de Ingress** (`commands/ingress.py`):
+   - `url`: Visualização de URLs e detalhes dos Ingresses
+
+5. **Utilitários** (`utils/kubernetes.py`):
    - Funções auxiliares para Kubernetes
    - Formatação de métricas e idade
    - Verificação de configuração AWS

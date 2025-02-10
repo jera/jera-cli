@@ -6,6 +6,8 @@ from .commands.pods import pods, logs, exec, pods_by_node, describe
 from .commands.metrics import pod_metrics, all_metrics
 from .commands.config import init, use, login_aws
 from .commands.nodes import nodes
+from .commands.namespaces import namespaces
+from .commands.ingress import url
 
 console = Console()
 
@@ -35,11 +37,11 @@ def cli(ctx):
       namespaces   Lista todos os namespaces disponíveis com status
       pod-metrics  Mostra análise detalhada de recursos dos pods
       all-metrics  Mostra análise detalhada de recursos de todos os pods
+      url          Mostra as URLs dos Ingresses no namespace
     
     🔍 Operações em Pods:
       logs         Visualiza logs de um pod (com opção de follow)
       exec         Abre um shell interativo dentro do pod
-      delete       Remove um pod do cluster (com confirmação)
     
     Fluxo básico de uso:
     
@@ -55,6 +57,7 @@ def cli(ctx):
         $ jeracli pod-metrics     # Vê métricas dos pods
         $ jeracli logs           # Vê logs (interativo)
         $ jeracli exec meu-pod   # Acessa o pod
+        $ jeracli url            # Vê URLs dos Ingresses
     
     Use --help em qualquer comando para mais informações:
         $ jeracli init --help
@@ -75,6 +78,8 @@ cli.add_command(all_metrics)
 cli.add_command(nodes)
 cli.add_command(pods_by_node)
 cli.add_command(describe)
+cli.add_command(namespaces)
+cli.add_command(url)
 
 if __name__ == '__main__':
     cli() 
