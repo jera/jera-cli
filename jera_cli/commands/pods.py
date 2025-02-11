@@ -596,4 +596,109 @@ def describe(pod_name=None):
         console.print()  # Linha em branco no final
         
     except Exception as e:
-        console.print(f"❌ Erro ao obter detalhes do pod: {str(e)}", style="bold red") 
+        console.print(f"❌ Erro ao obter detalhes do pod: {str(e)}", style="bold red")
+
+@click.command()
+@click.argument('pod_names', nargs=-1)
+@click.option('--force', '-f', is_flag=True, help='Força a deleção do pod')
+@click.option('--all', '-a', is_flag=True, help='Deleta todos os pods do namespace')
+def delete(pod_names=None, force=False, all=False):
+    """Deleta um ou mais pods no namespace atual.
+    
+    Permite deletar pods específicos ou todos os pods do namespace.
+    Use a flag --force para forçar a deleção.
+    
+    Exemplos:
+        $ jeracli delete                   # Seleciona pods interativamente
+        $ jeracli delete meu-pod           # Deleta um pod específico
+        $ jeracli delete pod1 pod2         # Deleta múltiplos pods
+        $ jeracli delete --force           # Força deleção de pods selecionados
+        $ jeracli delete --all             # Deleta todos os pods do namespace
+        $ jeracli delete --all --force     # Força deleção de todos os pods
+    """
+    try:
+        namespace = load_namespace()
+        if not namespace:
+            console.print("❌ Namespace não definido. Use 'jeracli use <namespace>' primeiro.", style="bold red")
+            return
+
+        config.load_kube_config()
+        v1 = client.CoreV1Api()
+        
+        # Busca todos os pods no namespace
+        pods = v1.list_namespaced_pod(namespace)
+        pod_list = [pod.metadata.name for pod in pods.items]
+        
+        # Se --all for usado, substitui a lista de pods
+        if all:
+            pod_names = pod_list
+        
+        # Se nenhum pod for especificado, mostra seleção interativa
+        if not pod_names:
+            questions = [
+                inquirer.Checkbox('pods',
+                                 message="Selecione os pods para deletar (espaço para selecionar, enter para confirmar)",
+                                 choices=pod_list,
+                                 )
+            ]
+            answers = inquirer.prompt(questions)
+            
+            if not answers or not answers['pods']:
+                console.print("❌ Nenhum pod selecionado.", style="bold red")
+                return
+            
+            pod_names = answers['pods']
+        
+        # Verifica se os pods existem
+        invalid_pods = [pod for pod in pod_names if pod not in pod_list]
+        if invalid_pods:
+            console.print(f"❌ Pods não encontrados: {', '.join(invalid_pods)}", style="bold red")
+            return
+        
+        # Confirmação de deleção
+        console.print("\n⚠️  Confirmação de Deleção:", style="yellow")
+        console.print(f"Namespace: [bold green]{namespace}[/]")
+        console.print(f"Pods a serem deletados: [bold cyan]{', '.join(pod_names)}[/]")
+        console.print(f"Modo de Força: [bold {'green' if force else 'red'}]{force}[/]")
+        
+        confirm = click.confirm("Deseja realmente deletar estes pods?", default=False)
+        if not confirm:
+            console.print("❌ Operação cancelada.", style="bold red")
+            return
+        
+        # Deleta os pods
+        deleted_pods = []
+        failed_pods = []
+        
+        for pod_name in pod_names:
+            try:
+                # Opções de deleção
+                delete_options = client.V1DeleteOptions()
+                if force:
+                    delete_options.grace_period_seconds = 0
+                
+                v1.delete_namespaced_pod(
+                    name=pod_name,
+                    namespace=namespace,
+                    body=delete_options
+                )
+                deleted_pods.append(pod_name)
+                console.print(f"✅ Pod [bold cyan]{pod_name}[/] deletado com sucesso.", style="green")
+            
+            except Exception as e:
+                failed_pods.append(pod_name)
+                console.print(f"❌ Erro ao deletar pod [bold red]{pod_name}[/]: {str(e)}", style="bold red")
+        
+        # Resumo
+        console.print("\n📊 Resumo da Operação:")
+        console.print(f"Total de Pods: [bold]{len(pod_names)}[/]")
+        console.print(f"Deletados com Sucesso: [green]{len(deleted_pods)}[/]")
+        console.print(f"Falhas: [red]{len(failed_pods)}[/]")
+        
+        if failed_pods:
+            console.print("\n❗ Pods que falharam na deleção:")
+            for pod in failed_pods:
+                console.print(f"  • [bold red]{pod}[/]")
+        
+    except Exception as e:
+        console.print(f"❌ Erro ao deletar pods: {str(e)}", style="bold red") 

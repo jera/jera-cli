@@ -187,6 +187,24 @@ jeracli nodes
 jeracli describe node meu-node-nome
 ```
 
+### Cenário 7: Deletando Pods
+```bash
+# Deleta um pod específico
+jeracli delete meu-pod
+
+# Deleta múltiplos pods
+jeracli delete pod1 pod2
+
+# Força a deleção de um pod
+jeracli delete meu-pod --force
+
+# Deleta todos os pods do namespace atual
+jeracli delete --all
+
+# Força a deleção de todos os pods
+jeracli delete --all --force
+```
+
 ### Dicas Adicionais
 - Use `jeracli --help` para ver todos os comandos disponíveis
 - Adicione `-h` ou `--help` após qualquer comando para ver opções específicas
