@@ -15,6 +15,38 @@ if [ "$EUID" -ne 0 ]; then
     exit $?
 fi
 
+# Verifica se estamos em um sistema Debian/Ubuntu
+if [[ "$OSTYPE" == "linux-gnu"* ]] && [ -f /etc/os-release ]; then
+    source /etc/os-release
+    if [[ "$ID" == "ubuntu" || "$ID" == "debian" || "$ID_LIKE" == *"ubuntu"* || "$ID_LIKE" == *"debian"* ]]; then
+        echo -e "${YELLOW}📦 Sistema baseado em Debian/Ubuntu detectado. Verificando pacotes necessários...${NC}"
+        
+        # Verifica a versão do Python
+        if command -v python3 &> /dev/null; then
+            PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+            echo -e "${YELLOW}📦 Versão do Python detectada: ${PYTHON_VERSION}${NC}"
+            
+            # Verifica se o pacote venv específico está instalado
+            VENV_PACKAGE="python${PYTHON_VERSION}-venv"
+            if ! dpkg -s "$VENV_PACKAGE" &> /dev/null; then
+                echo -e "${YELLOW}⚠️ Pacote ${VENV_PACKAGE} não encontrado. Instalando...${NC}"
+                apt-get update
+                apt-get install -y python3-venv "$VENV_PACKAGE" || {
+                    echo -e "${YELLOW}⚠️ Não foi possível instalar ${VENV_PACKAGE} diretamente.${NC}"
+                    
+                    # Tenta instalar pacotes específicos para versões comuns
+                    if [[ "$PYTHON_VERSION" == "3.8" ]]; then
+                        echo -e "${YELLOW}📦 Instalando python3.8-venv...${NC}"
+                        apt-get install -y python3.8-venv python3.8-dev
+                    fi
+                }
+            else
+                echo -e "${GREEN}✅ Pacote ${VENV_PACKAGE} já está instalado.${NC}"
+            fi
+        fi
+    fi
+fi
+
 # Função para instalar Python e pip no Ubuntu
 install_python_ubuntu() {
     echo -e "${YELLOW}📦 Instalando Python 3.10+ no Ubuntu...${NC}"
@@ -38,6 +70,11 @@ install_python_ubuntu() {
     
     # Instala pacotes de desenvolvimento e pip
     apt-get install -y python3-pip python3-dev python3-setuptools python3-wheel
+    
+    # Garante que o pacote venv esteja instalado para a versão do Python em uso
+    PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    echo -e "${YELLOW}📦 Instalando python${PYTHON_VERSION}-venv...${NC}"
+    apt-get install -y python3-venv "python${PYTHON_VERSION}-venv" || apt-get install -y python3-venv
     
     echo -e "${GREEN}✅ Pacotes de desenvolvimento Python instalados.${NC}"
 }
@@ -105,6 +142,34 @@ check_python() {
     fi
     
     echo -e "${GREEN}✅ Python ${PYTHON_MAJOR}.${PYTHON_MINOR} verificado com sucesso!${NC}"
+    
+    # Verifica se o pacote venv está disponível para a versão do Python em uso
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Para sistemas baseados em Debian/Ubuntu
+        PYTHON_VERSION="${PYTHON_MAJOR}.${PYTHON_MINOR}"
+        VENV_PACKAGE="python${PYTHON_VERSION}-venv"
+        
+        echo -e "${YELLOW}📦 Verificando pacote ${VENV_PACKAGE}...${NC}"
+        
+        if ! dpkg -s python3-venv &> /dev/null || ! dpkg -s "$VENV_PACKAGE" &> /dev/null 2>&1; then
+            echo -e "${YELLOW}⚠️ Instalando pacotes necessários para ambientes virtuais...${NC}"
+            apt-get update
+            apt-get install -y python3-venv
+            
+            # Tenta instalar o pacote específico para a versão do Python
+            if [[ "$PYTHON_VERSION" == "3.8" ]]; then
+                apt-get install -y python3.8-venv
+            elif [[ "$PYTHON_VERSION" == "3.9" ]]; then
+                apt-get install -y python3.9-venv
+            elif [[ "$PYTHON_VERSION" == "3.10" ]]; then
+                apt-get install -y python3.10-venv
+            else
+                apt-get install -y "$VENV_PACKAGE" || true
+            fi
+        else
+            echo -e "${GREEN}✅ Pacote ${VENV_PACKAGE} já está instalado.${NC}"
+        fi
+    fi
 }
 
 # Função para verificar e instalar pip
@@ -135,9 +200,53 @@ check_pip() {
     echo -e "${GREEN}✅ pip e pacotes básicos atualizados com sucesso!${NC}"
 }
 
+# Função para verificar e instalar pacotes necessários para o ambiente virtual
+install_venv_packages() {
+    echo -e "${YELLOW}📦 Verificando pacotes necessários para ambientes virtuais...${NC}"
+    
+    # Detecta a versão do Python
+    PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    echo -e "${YELLOW}📦 Versão do Python detectada: ${PYTHON_VERSION}${NC}"
+    
+    # Instala o pacote python3-venv genérico
+    apt-get update
+    apt-get install -y python3-venv python3-dev
+    
+    # Tenta instalar o pacote específico para a versão do Python
+    VENV_PACKAGE="python${PYTHON_VERSION}-venv"
+    echo -e "${YELLOW}📦 Tentando instalar ${VENV_PACKAGE}...${NC}"
+    
+    # Tenta instalar o pacote específico
+    apt-get install -y "$VENV_PACKAGE" || {
+        echo -e "${YELLOW}⚠️ Não foi possível instalar ${VENV_PACKAGE} diretamente.${NC}"
+        echo -e "${YELLOW}⚠️ Tentando alternativas...${NC}"
+        
+        # Tenta instalar pacotes específicos para versões comuns
+        if [[ "$PYTHON_VERSION" == "3.8" ]]; then
+            apt-get install -y python3.8-venv python3.8-dev
+        elif [[ "$PYTHON_VERSION" == "3.9" ]]; then
+            apt-get install -y python3.9-venv python3.9-dev
+        elif [[ "$PYTHON_VERSION" == "3.10" ]]; then
+            apt-get install -y python3.10-venv python3.10-dev
+        elif [[ "$PYTHON_VERSION" == "3.11" ]]; then
+            apt-get install -y python3.11-venv python3.11-dev
+        fi
+    }
+    
+    # Instala virtualenv como alternativa
+    apt-get install -y python3-virtualenv
+    
+    echo -e "${GREEN}✅ Pacotes para ambiente virtual instalados.${NC}"
+}
+
 # Chama as funções de verificação e instalação
 check_python
 check_pip
+
+# Verifica e instala pacotes necessários para o ambiente virtual
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    install_venv_packages
+fi
 
 # Verifica se o AWS CLI está instalado
 check_aws_cli() {
@@ -247,17 +356,169 @@ cp -r . "$INSTALL_DIR"
 # Cria ambiente virtual no diretório de instalação
 echo -e "${YELLOW}🔧 Criando ambiente virtual...${NC}"
 cd "$INSTALL_DIR"
-python3 -m venv .venv
+
+# Verifica se o pacote venv está instalado
+if ! dpkg -s python3-venv &> /dev/null; then
+    echo -e "${YELLOW}⚠️ Pacote python3-venv não encontrado. Instalando...${NC}"
+    apt-get install -y python3-venv
+    
+    # Tenta instalar o pacote específico para a versão do Python em uso
+    PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    echo -e "${YELLOW}📦 Detectada versão Python ${PYTHON_VERSION}. Instalando python${PYTHON_VERSION}-venv...${NC}"
+    
+    # Tenta instalar o pacote específico para a versão do Python
+    if [[ "$PYTHON_VERSION" == "3.8" ]]; then
+        apt-get install -y python3.8-venv
+    elif [[ "$PYTHON_VERSION" == "3.9" ]]; then
+        apt-get install -y python3.9-venv
+    elif [[ "$PYTHON_VERSION" == "3.10" ]]; then
+        apt-get install -y python3.10-venv
+    else
+        apt-get install -y "python${PYTHON_VERSION}-venv" || true
+    fi
+fi
+
+# Tenta criar o ambiente virtual
+echo -e "${YELLOW}🔧 Criando ambiente virtual com Python $(python3 --version)...${NC}"
+python3 -m venv .venv || {
+    echo -e "${RED}❌ Falha ao criar ambiente virtual com python3 -m venv.${NC}"
+    echo -e "${YELLOW}⚠️ Tentando método alternativo...${NC}"
+    
+    # Tenta usar o módulo virtualenv como alternativa
+    apt-get install -y python3-virtualenv
+    python3 -m virtualenv .venv || {
+        echo -e "${RED}❌ Falha ao criar ambiente virtual com virtualenv.${NC}"
+        echo -e "${YELLOW}⚠️ Tentando método com --without-pip...${NC}"
+        
+        # Tenta criar sem pip
+        python3 -m venv --without-pip .venv || {
+            echo -e "${RED}❌ Todas as tentativas de criar o ambiente virtual falharam.${NC}"
+            
+            # Verifica a versão do Python para sugerir o pacote correto
+            PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+            
+            echo -e "${YELLOW}Por favor, execute manualmente:${NC}"
+            echo -e "${GREEN}sudo apt update${NC}"
+            echo -e "${GREEN}sudo apt install -y python3-venv python${PYTHON_VERSION}-venv${NC}"
+            
+            # Mensagem específica para Python 3.8
+            if [[ "$PYTHON_VERSION" == "3.8" ]]; then
+                echo -e "${GREEN}sudo apt install -y python3.8-venv python3.8-dev${NC}"
+            fi
+            
+            echo -e "${YELLOW}E tente novamente.${NC}"
+            
+            # Oferece a opção de continuar sem ambiente virtual
+            echo -e "${YELLOW}Deseja continuar a instalação sem ambiente virtual? (s/N)${NC}"
+            read -r response
+            if [[ "$response" =~ ^([sS][iI]|[sS])$ ]]; then
+                echo -e "${YELLOW}⚠️ Continuando sem ambiente virtual. A instalação pode não funcionar corretamente.${NC}"
+                mkdir -p .venv/bin
+                echo "#!/bin/bash" > .venv/bin/activate
+                echo "# Ambiente virtual simulado" >> .venv/bin/activate
+                chmod +x .venv/bin/activate
+            else
+                echo -e "${RED}❌ Instalação abortada.${NC}"
+                exit 1
+            fi
+        }
+        
+        # Se criou sem pip, instala pip manualmente
+        if [ -f ".venv/bin/python3" ]; then
+            echo -e "${YELLOW}📦 Instalando pip no ambiente virtual...${NC}"
+            curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+            .venv/bin/python3 get-pip.py
+            rm get-pip.py
+        fi
+    }
+}
+
+# Verifica se o ambiente virtual foi criado com sucesso
+if [ ! -f ".venv/bin/activate" ]; then
+    echo -e "${RED}❌ Não foi possível criar o ambiente virtual. Abortando instalação.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Ambiente virtual criado com sucesso!${NC}"
 
 # Ativa o ambiente virtual e instala dependências
-source .venv/bin/activate
+echo -e "${YELLOW}🔧 Ativando ambiente virtual...${NC}"
+if [ -f ".venv/bin/activate" ]; then
+    source .venv/bin/activate || {
+        echo -e "${RED}❌ Falha ao ativar o ambiente virtual.${NC}"
+        echo -e "${YELLOW}⚠️ Tentando método alternativo...${NC}"
+        
+        # Tenta ativar usando o caminho completo
+        source "$INSTALL_DIR/.venv/bin/activate" || {
+            echo -e "${RED}❌ Não foi possível ativar o ambiente virtual.${NC}"
+            echo -e "${YELLOW}⚠️ Continuando sem ambiente virtual ativado. A instalação pode falhar.${NC}"
+            
+            # Define variáveis de ambiente manualmente para simular ambiente virtual
+            export VIRTUAL_ENV="$INSTALL_DIR/.venv"
+            export PATH="$INSTALL_DIR/.venv/bin:$PATH"
+        }
+    }
+else
+    echo -e "${RED}❌ Arquivo de ativação do ambiente virtual não encontrado.${NC}"
+    echo -e "${YELLOW}⚠️ Tentando criar manualmente...${NC}"
+    
+    mkdir -p .venv/bin
+    echo "#!/bin/bash" > .venv/bin/activate
+    echo "export VIRTUAL_ENV=\"$INSTALL_DIR/.venv\"" >> .venv/bin/activate
+    echo "export PATH=\"\$VIRTUAL_ENV/bin:\$PATH\"" >> .venv/bin/activate
+    chmod +x .venv/bin/activate
+    
+    source .venv/bin/activate || {
+        echo -e "${RED}❌ Não foi possível ativar o ambiente virtual criado manualmente.${NC}"
+        echo -e "${YELLOW}⚠️ Continuando sem ambiente virtual ativado. A instalação pode falhar.${NC}"
+        
+        # Define variáveis de ambiente manualmente
+        export VIRTUAL_ENV="$INSTALL_DIR/.venv"
+        export PATH="$INSTALL_DIR/.venv/bin:$PATH"
+    }
+fi
+
+# Verifica se o ambiente virtual está ativo
+if [[ "$VIRTUAL_ENV" == "" ]]; then
+    echo -e "${YELLOW}⚠️ Ambiente virtual não foi ativado corretamente.${NC}"
+    echo -e "${YELLOW}⚠️ Continuando sem ambiente virtual. A instalação pode falhar.${NC}"
+    
+    # Define variáveis de ambiente manualmente
+    export VIRTUAL_ENV="$INSTALL_DIR/.venv"
+    export PATH="$INSTALL_DIR/.venv/bin:$PATH"
+else
+    echo -e "${GREEN}✅ Ambiente virtual ativado com sucesso!${NC}"
+fi
 
 # Atualiza pip e setuptools
 echo -e "${YELLOW}📦 Atualizando ferramentas de instalação...${NC}"
-pip install --upgrade pip setuptools wheel
+python3 -m pip install --upgrade pip setuptools wheel || {
+    echo -e "${RED}❌ Falha ao atualizar pip e ferramentas.${NC}"
+    echo -e "${YELLOW}⚠️ Tentando método alternativo...${NC}"
+    
+    # Tenta instalar pip manualmente
+    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+    python3 get-pip.py
+    rm get-pip.py
+}
 
 echo -e "${YELLOW}📦 Instalando dependências...${NC}"
-pip install --use-pep517 -e .
+pip install --use-pep517 -e . || {
+    echo -e "${RED}❌ Falha ao instalar dependências com pip.${NC}"
+    echo -e "${YELLOW}⚠️ Tentando método alternativo...${NC}"
+    
+    # Tenta instalar com python -m pip
+    python3 -m pip install --use-pep517 -e . || {
+        echo -e "${RED}❌ Falha ao instalar dependências.${NC}"
+        echo -e "${YELLOW}⚠️ Tentando instalar sem a flag --use-pep517...${NC}"
+        
+        # Tenta instalar sem a flag --use-pep517
+        python3 -m pip install -e . || {
+            echo -e "${RED}❌ Todas as tentativas de instalar dependências falharam.${NC}"
+            echo -e "${YELLOW}⚠️ A instalação pode não funcionar corretamente.${NC}"
+        }
+    }
+}
 
 # Cria o wrapper script
 cat > "$WRAPPER_SCRIPT" << 'EOF'
