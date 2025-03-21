@@ -4,7 +4,7 @@ import click
 from rich.console import Console
 from .commands.pods import pods, logs, exec, pods_by_node, describe, delete
 from .commands.metrics import pod_metrics, all_metrics
-from .commands.config import init, use, login_aws, use_cluster, clusters
+from .commands.config import init, use, login_aws, use_cluster, clusters, aws_login
 from .commands.nodes import nodes
 from .commands.namespaces import namespaces
 from .commands.ingress import url
@@ -29,10 +29,11 @@ def cli(ctx):
     
     ⚡ Configuração:
       init          Configura AWS SSO e kubectl para o cluster
-      use          Define o namespace atual para operações
-      use-cluster  Alterna entre diferentes clusters Kubernetes
-      clusters     Lista todos os clusters configurados
-      login-aws    Faz login no AWS SSO de forma interativa
+      use           Define o namespace atual para operações
+      use-cluster   Alterna entre diferentes clusters Kubernetes
+      clusters      Lista todos os clusters configurados
+      login-aws     Faz login no AWS SSO de forma interativa
+      aws-login     Alias para o comando login-aws
     
     📊 Visualização:
       pods         Lista todos os pods no namespace atual
@@ -74,6 +75,7 @@ cli.add_command(use)
 cli.add_command(use_cluster)
 cli.add_command(clusters)
 cli.add_command(login_aws)
+cli.add_command(aws_login)
 cli.add_command(pods)
 cli.add_command(logs)
 cli.add_command(exec)
