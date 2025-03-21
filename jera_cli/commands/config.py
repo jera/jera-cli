@@ -5,13 +5,18 @@ import yaml
 import os
 from kubernetes import client, config
 import subprocess
+import json
+from rich.table import Table
 from ..utils.kubernetes import check_aws_sso_config, check_aws_sso_session
 
 console = Console()
 
 @click.command()
-def init():
-    """Inicializa a configuração do kubectl para o cluster da Jera."""
+@click.option('--cluster', '-c', help='Nome do cluster EKS para inicializar')
+@click.option('--region', '-r', default='us-east-1', help='Região AWS onde o cluster está localizado')
+@click.option('--profile', '-p', help='Profile AWS para usar')
+def init(cluster=None, region='us-east-1', profile=None):
+    """Inicializa a configuração do kubectl para um cluster EKS."""
     try:
         # Verifica se o AWS CLI está instalado
         try:
@@ -55,27 +60,92 @@ def init():
         )
         profiles = result.stdout.strip().split('\n')
         
-        # Usa o primeiro profile que funcionar
-        profile_used = None
-        for profile in profiles:
+        selected_profile = profile
+        
+        # Se não foi fornecido um profile, mostra a lista interativa
+        if not selected_profile:
+            questions = [
+                inquirer.List('profile',
+                             message="Selecione o profile AWS para usar",
+                             choices=profiles,
+                             )
+            ]
+            answers = inquirer.prompt(questions)
+            
+            if answers:
+                selected_profile = answers['profile']
+            else:
+                return
+        
+        # Se não foi fornecido cluster, lista os clusters disponíveis
+        selected_cluster = cluster
+        if not selected_cluster:
+            console.print(f"🔍 Listando clusters EKS disponíveis com profile '{selected_profile}'...", style="bold blue")
+            
             try:
-                # Tenta usar o profile para atualizar o kubeconfig
-                console.print(f"🔄 Tentando atualizar kubeconfig com profile {profile}...", style="bold blue")
-                subprocess.run([
-                    "aws", "eks", "update-kubeconfig",
-                    "--name", "jera-cluster",
-                    "--region", "us-east-1",
-                    "--profile", profile
-                ], check=True)
-                profile_used = profile
-                break
-            except:
-                continue
+                result = subprocess.run(
+                    ["aws", "eks", "list-clusters", "--region", region, "--profile", selected_profile],
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                clusters_data = json.loads(result.stdout)
+                available_clusters = clusters_data.get("clusters", [])
                 
-        if profile_used:
-            console.print(f"✅ Configuração do kubectl atualizada com sucesso usando profile '{profile_used}'!", style="bold green")
-        else:
-            console.print("❌ Não foi possível encontrar um profile válido para acessar o cluster.", style="bold red")
+                if not available_clusters:
+                    console.print("❌ Nenhum cluster EKS encontrado na conta.", style="bold red")
+                    return
+                
+                questions = [
+                    inquirer.List('cluster',
+                                message="Selecione um cluster EKS para inicializar",
+                                choices=available_clusters,
+                                )
+                ]
+                answers = inquirer.prompt(questions)
+                
+                if answers:
+                    selected_cluster = answers['cluster']
+                else:
+                    return
+            except Exception as e:
+                console.print(f"❌ Erro ao listar clusters: {str(e)}", style="bold red")
+                return
+        
+        # Tenta usar o profile para atualizar o kubeconfig
+        console.print(f"🔄 Atualizando kubeconfig para o cluster '{selected_cluster}' com profile '{selected_profile}'...", style="bold blue")
+        try:
+            subprocess.run([
+                "aws", "eks", "update-kubeconfig",
+                "--name", selected_cluster,
+                "--region", region,
+                "--profile", selected_profile
+            ], check=True)
+            
+            # Atualiza a configuração para o cluster atual
+            os.makedirs(os.path.expanduser('~/.jera'), exist_ok=True)
+            config_path = os.path.expanduser('~/.jera/config')
+            
+            # Carrega configuração existente ou cria uma nova
+            config_data = {}
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config_data = yaml.safe_load(f) or {}
+            
+            # Atualiza a configuração com o cluster atual
+            config_data['current_cluster'] = {
+                'name': selected_cluster,
+                'region': region,
+                'profile': selected_profile
+            }
+            
+            # Salva a configuração
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
+            
+            console.print(f"✅ Configuração do kubectl atualizada com sucesso para o cluster '{selected_cluster}'!", style="bold green")
+        except subprocess.CalledProcessError as e:
+            console.print(f"❌ Erro ao atualizar kubeconfig: {str(e)}", style="bold red")
             
     except subprocess.CalledProcessError as e:
         console.print(f"❌ Erro durante a inicialização: {str(e)}", style="bold red")
@@ -120,12 +190,231 @@ def use(namespace=None):
             
         # Salva o namespace selecionado
         os.makedirs(os.path.expanduser('~/.jera'), exist_ok=True)
-        with open(os.path.expanduser('~/.jera/config'), 'w') as f:
-            yaml.dump({'namespace': selected_namespace}, f)
+        config_path = os.path.expanduser('~/.jera/config')
+        
+        # Carrega configuração existente ou cria uma nova
+        config_data = {}
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config_data = yaml.safe_load(f) or {}
+        
+        # Atualiza apenas o namespace, mantendo o resto da configuração
+        config_data['namespace'] = selected_namespace
+        
+        # Salva a configuração
+        with open(config_path, 'w') as f:
+            yaml.dump(config_data, f)
             
         console.print(f"✅ Namespace alterado para: [bold green]{selected_namespace}[/]", style="bold")
     except Exception as e:
         console.print(f"❌ Erro ao alterar namespace: {str(e)}", style="bold red")
+
+@click.command(name="use-cluster")
+@click.argument('cluster_name', required=False)
+@click.option('--region', '-r', default='us-east-1', help='Região AWS onde o cluster está localizado')
+@click.option('--profile', '-p', help='Profile AWS para usar')
+def use_cluster(cluster_name=None, region='us-east-1', profile=None):
+    """Alterna entre diferentes clusters Kubernetes."""
+    try:
+        # Verifica se tem uma sessão AWS ativa
+        if not check_aws_sso_session():
+            console.print("\n⚠️  Você não tem uma sessão AWS SSO ativa!", style="bold yellow")
+            console.print("\n📝 Use o comando 'jeracli login-aws' para fazer login primeiro.", style="bold blue")
+            return
+        
+        # Lista os profiles disponíveis
+        result = subprocess.run(
+            ["aws", "configure", "list-profiles"],
+            capture_output=True,
+            text=True
+        )
+        profiles = result.stdout.strip().split('\n')
+        
+        # Carrega a configuração atual
+        config_path = os.path.expanduser('~/.jera/config')
+        config_data = {}
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config_data = yaml.safe_load(f) or {}
+        
+        current_profile = profile
+        
+        # Se não foi fornecido um profile, mostra a lista interativa
+        if not current_profile:
+            # Obtém o profile atual da configuração (se existir)
+            current_profile_from_config = None
+            if 'current_cluster' in config_data and 'profile' in config_data['current_cluster']:
+                current_profile_from_config = config_data['current_cluster']['profile']
+            
+            # Prepara as opções com o perfil atual destacado
+            profile_choices = []
+            for p in profiles:
+                if p == current_profile_from_config:
+                    profile_choices.append(f"{p} (atual)")
+                else:
+                    profile_choices.append(p)
+            
+            questions = [
+                inquirer.List('profile',
+                            message="Selecione o profile AWS para usar",
+                            choices=profile_choices,
+                            )
+            ]
+            answers = inquirer.prompt(questions)
+            
+            if answers:
+                # Remove o sufixo " (atual)" se presente
+                current_profile = answers['profile'].replace(" (atual)", "")
+            else:
+                return
+        
+        # Lista os clusters disponíveis para o profile selecionado
+        console.print(f"🔍 Listando clusters EKS disponíveis com profile '{current_profile}'...", style="bold blue")
+        
+        try:
+            result = subprocess.run(
+                ["aws", "eks", "list-clusters", "--region", region, "--profile", current_profile],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            clusters_data = json.loads(result.stdout)
+            available_clusters = clusters_data.get("clusters", [])
+            
+            if not available_clusters:
+                console.print(f"❌ Nenhum cluster EKS encontrado na conta com profile '{current_profile}'.", style="bold red")
+                return
+            
+            selected_cluster = cluster_name
+            
+            # Se não foi fornecido um cluster, mostra a lista interativa
+            if not selected_cluster:
+                # Obtém o cluster atual da configuração (se existir)
+                current_cluster = None
+                if 'current_cluster' in config_data and 'name' in config_data['current_cluster']:
+                    current_cluster = config_data['current_cluster']['name']
+                
+                # Prepara as opções com o cluster atual destacado
+                cluster_choices = []
+                for c in available_clusters:
+                    if c == current_cluster:
+                        cluster_choices.append(f"{c} (atual)")
+                    else:
+                        cluster_choices.append(c)
+                
+                questions = [
+                    inquirer.List('cluster',
+                                message="Selecione um cluster EKS para usar",
+                                choices=cluster_choices,
+                                )
+                ]
+                answers = inquirer.prompt(questions)
+                
+                if answers:
+                    # Remove o sufixo " (atual)" se presente
+                    selected_cluster = answers['cluster'].replace(" (atual)", "")
+                else:
+                    return
+            
+            # Verifica se o cluster selecionado existe
+            if selected_cluster not in available_clusters:
+                console.print(f"❌ Cluster '{selected_cluster}' não encontrado na conta.", style="bold red")
+                return
+            
+            # Atualiza o kubeconfig para o cluster selecionado
+            console.print(f"🔄 Atualizando kubeconfig para o cluster '{selected_cluster}'...", style="bold blue")
+            subprocess.run([
+                "aws", "eks", "update-kubeconfig",
+                "--name", selected_cluster,
+                "--region", region,
+                "--profile", current_profile
+            ], check=True)
+            
+            # Atualiza a configuração do Jera CLI
+            config_data['current_cluster'] = {
+                'name': selected_cluster,
+                'region': region,
+                'profile': current_profile
+            }
+            
+            # Salva a configuração
+            os.makedirs(os.path.expanduser('~/.jera'), exist_ok=True)
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
+            
+            console.print(f"✅ Cluster alterado para: [bold green]{selected_cluster}[/] com profile [bold green]{current_profile}[/]", style="bold")
+            
+            # Lista os clusters configurados após a alteração
+            list_configured_clusters()
+            
+        except Exception as e:
+            console.print(f"❌ Erro ao listar ou selecionar clusters: {str(e)}", style="bold red")
+            
+    except Exception as e:
+        console.print(f"❌ Erro ao alternar entre clusters: {str(e)}", style="bold red")
+
+def list_configured_clusters():
+    """Lista todos os contextos de clusters configurados no kubeconfig."""
+    try:
+        # Obtém os contextos do kubeconfig
+        result = subprocess.run(
+            ["kubectl", "config", "get-contexts"],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            console.print("❌ Erro ao listar contextos do kubectl.", style="bold red")
+            return
+        
+        # Obtém o contexto atual
+        current_context_result = subprocess.run(
+            ["kubectl", "config", "current-context"],
+            capture_output=True,
+            text=True
+        )
+        current_context = current_context_result.stdout.strip() if current_context_result.returncode == 0 else None
+        
+        # Cria uma tabela com os contextos
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Nome do Contexto")
+        table.add_column("Cluster")
+        table.add_column("Usuário")
+        table.add_column("Status")
+        
+        # Parse das linhas do resultado
+        lines = result.stdout.strip().split('\n')
+        if len(lines) > 1:  # Ignora o cabeçalho
+            for line in lines[1:]:  # Pula o cabeçalho
+                parts = line.strip().split()
+                if len(parts) >= 3:
+                    is_current = '*' in parts[0]
+                    
+                    # Ajusta os índices baseados se tem o asterisco no começo
+                    if is_current:
+                        context_name = parts[1]
+                        cluster_name = parts[2]
+                        user_name = parts[3] if len(parts) > 3 else "N/A"
+                    else:
+                        context_name = parts[0]
+                        cluster_name = parts[1]
+                        user_name = parts[2] if len(parts) > 2 else "N/A"
+                    
+                    status = "[bold green]ATUAL[/]" if context_name == current_context else ""
+                    
+                    table.add_row(
+                        context_name,
+                        cluster_name,
+                        user_name,
+                        status
+                    )
+        
+        console.print("\n📋 Clusters configurados:", style="bold blue")
+        console.print(table)
+        console.print("\nDica: Use 'jeracli use-cluster' para alternar entre clusters.", style="dim")
+        
+    except Exception as e:
+        console.print(f"❌ Erro ao listar clusters configurados: {str(e)}", style="bold red")
 
 @click.command(name="login-aws")
 def login_aws():
@@ -212,4 +501,9 @@ def login_aws():
     except Exception as e:
         console.print(f"\n❌ Erro ao fazer login: {str(e)}", style="bold red")
         if "The SSO session has expired" in str(e):
-            console.print("A sessão SSO expirou. Tente novamente.", style="yellow") 
+            console.print("A sessão SSO expirou. Tente novamente.", style="yellow")
+
+@click.command(name="clusters")
+def clusters():
+    """Lista todos os clusters Kubernetes configurados."""
+    list_configured_clusters() 

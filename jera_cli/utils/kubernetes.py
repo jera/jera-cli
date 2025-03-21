@@ -3,6 +3,7 @@ from rich.console import Console
 import subprocess
 import time
 import os
+import yaml
 
 console = Console()
 
@@ -74,6 +75,41 @@ def check_aws_sso_session():
     except Exception as e:
         console.print(f"Erro ao verificar sessão SSO: {str(e)}", style="dim red")
         return False
+
+def get_current_cluster_info():
+    """Obtém informações do cluster atual configurado no Jera CLI"""
+    try:
+        config_path = os.path.expanduser('~/.jera/config')
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config_data = yaml.safe_load(f) or {}
+                
+            # Retorna informações do cluster atual, se disponíveis
+            if 'current_cluster' in config_data:
+                return config_data['current_cluster']
+                
+        # Se não encontrar informações configuradas, tenta obter do kubectl
+        try:
+            # Obtém o nome do contexto atual
+            result = subprocess.run(
+                ["kubectl", "config", "current-context"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            current_context = result.stdout.strip()
+            
+            # Retorna pelo menos o nome do contexto
+            return {
+                'context': current_context,
+                'name': 'desconhecido',  # Nome real do cluster não é facilmente identificável a partir do contexto
+                'profile': 'desconhecido'
+            }
+        except:
+            return None
+    except Exception as e:
+        console.print(f"Erro ao obter informações do cluster: {str(e)}", style="dim red")
+        return None
 
 def format_age(timestamp):
     """Formata a idade de um recurso baseado em seu timestamp"""
