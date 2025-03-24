@@ -8,11 +8,40 @@ NC='\033[0m'
 
 echo -e "${YELLOW}🚀 Instalando Jera CLI...${NC}\n"
 
-# Verifica se está rodando como sudo
-if [ "$EUID" -ne 0 ]; then 
+# Verifica se está rodando como sudo no Linux, mas não no macOS
+if [[ "$OSTYPE" == "linux-gnu"* ]] && [ "$EUID" -ne 0 ]; then 
     echo -e "${YELLOW}⚠️  Executando com sudo para instalação global...${NC}"
     sudo "$0" "$@"
     exit $?
+fi
+
+# Define os diretórios com base no sistema operacional
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS - instala no diretório do usuário
+    INSTALL_DIR="$HOME/.jera-cli"
+    WRAPPER_SCRIPT="$HOME/.local/bin/jeracli"
+    ALIAS_SCRIPT="$HOME/.local/bin/jcli"
+    
+    # Garante que o diretório .local/bin existe e está no PATH
+    mkdir -p "$HOME/.local/bin"
+    
+    # Adiciona ao PATH se não estiver
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        echo -e "${YELLOW}📝 Adicionando $HOME/.local/bin ao PATH...${NC}"
+        if [[ -f "$HOME/.zshrc" ]]; then
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
+            echo -e "${YELLOW}✅ Adicionado ao .zshrc. Execute 'source ~/.zshrc' após a instalação.${NC}"
+        fi
+        if [[ -f "$HOME/.bash_profile" ]]; then
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bash_profile"
+            echo -e "${YELLOW}✅ Adicionado ao .bash_profile. Execute 'source ~/.bash_profile' após a instalação.${NC}"
+        fi
+    fi
+else
+    # Linux - instala globalmente
+    INSTALL_DIR="/opt/jera-cli"
+    WRAPPER_SCRIPT="/usr/local/bin/jeracli"
+    ALIAS_SCRIPT="/usr/local/bin/jcli"
 fi
 
 # Verifica se estamos em um sistema Debian/Ubuntu
@@ -94,12 +123,15 @@ install_python_macos() {
         brew install python@3.10
         
         # Adiciona ao PATH
-        echo 'export PATH="/usr/local/opt/python@3.10/bin:$PATH"' >> ~/.zshrc
-        echo 'export PATH="/usr/local/opt/python@3.10/bin:$PATH"' >> ~/.bash_profile
+        if [[ -f "$HOME/.zshrc" ]]; then
+            echo 'export PATH="/usr/local/opt/python@3.10/bin:$PATH"' >> "$HOME/.zshrc"
+        fi
+        if [[ -f "$HOME/.bash_profile" ]]; then
+            echo 'export PATH="/usr/local/opt/python@3.10/bin:$PATH"' >> "$HOME/.bash_profile"
+        fi
         
-        # Recarrega o shell
-        source ~/.zshrc
-        source ~/.bash_profile
+        # Atualiza o PATH atual
+        export PATH="/usr/local/opt/python@3.10/bin:$PATH"
     else
         echo -e "${GREEN}✅ Python 3.10 já está instalado via Homebrew.${NC}"
     fi
@@ -239,15 +271,6 @@ install_venv_packages() {
     echo -e "${GREEN}✅ Pacotes para ambiente virtual instalados.${NC}"
 }
 
-# Chama as funções de verificação e instalação
-check_python
-check_pip
-
-# Verifica e instala pacotes necessários para o ambiente virtual
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    install_venv_packages
-fi
-
 # Verifica se o AWS CLI está instalado
 check_aws_cli() {
     if ! command -v aws &> /dev/null; then
@@ -325,10 +348,14 @@ check_kubectl() {
     fi
 }
 
-# Define os diretórios
-INSTALL_DIR="/opt/jera-cli"
-WRAPPER_SCRIPT="/usr/local/bin/jeracli"
-ALIAS_SCRIPT="/usr/local/bin/jcli"
+# Chama as funções de verificação e instalação
+check_python
+check_pip
+
+# Verifica e instala pacotes necessários para o ambiente virtual
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    install_venv_packages
+fi
 
 # Verifica e instala o AWS CLI se necessário
 check_aws_cli
@@ -353,85 +380,109 @@ echo -e "${YELLOW}📁 Criando diretório de instalação...${NC}"
 mkdir -p "$INSTALL_DIR"
 cp -r . "$INSTALL_DIR"
 
-# Cria ambiente virtual no diretório de instalação
-echo -e "${YELLOW}🔧 Criando ambiente virtual...${NC}"
+# Cria o diretório para binários no macOS se ainda não existir
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    mkdir -p "$(dirname "$WRAPPER_SCRIPT")"
+fi
+
+# Vai para o diretório de instalação
 cd "$INSTALL_DIR"
 
-# Verifica se o pacote venv está instalado
-if ! dpkg -s python3-venv &> /dev/null; then
-    echo -e "${YELLOW}⚠️ Pacote python3-venv não encontrado. Instalando...${NC}"
-    apt-get install -y python3-venv
-    
-    # Tenta instalar o pacote específico para a versão do Python em uso
-    PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-    echo -e "${YELLOW}📦 Detectada versão Python ${PYTHON_VERSION}. Instalando python${PYTHON_VERSION}-venv...${NC}"
-    
-    # Tenta instalar o pacote específico para a versão do Python
-    if [[ "$PYTHON_VERSION" == "3.8" ]]; then
-        apt-get install -y python3.8-venv
-    elif [[ "$PYTHON_VERSION" == "3.9" ]]; then
-        apt-get install -y python3.9-venv
-    elif [[ "$PYTHON_VERSION" == "3.10" ]]; then
-        apt-get install -y python3.10-venv
-    else
-        apt-get install -y "python${PYTHON_VERSION}-venv" || true
+# Verifica se o pacote venv está instalado (somente no Linux)
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    if ! dpkg -s python3-venv &> /dev/null; then
+        echo -e "${YELLOW}⚠️ Pacote python3-venv não encontrado. Instalando...${NC}"
+        apt-get install -y python3-venv
+        
+        # Tenta instalar o pacote específico para a versão do Python em uso
+        PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+        echo -e "${YELLOW}📦 Detectada versão Python ${PYTHON_VERSION}. Instalando python${PYTHON_VERSION}-venv...${NC}"
+        
+        # Tenta instalar o pacote específico para a versão do Python
+        if [[ "$PYTHON_VERSION" == "3.8" ]]; then
+            apt-get install -y python3.8-venv
+        elif [[ "$PYTHON_VERSION" == "3.9" ]]; then
+            apt-get install -y python3.9-venv
+        elif [[ "$PYTHON_VERSION" == "3.10" ]]; then
+            apt-get install -y python3.10-venv
+        else
+            apt-get install -y "python${PYTHON_VERSION}-venv" || true
+        fi
     fi
 fi
 
-# Tenta criar o ambiente virtual
+# Cria ambiente virtual no diretório de instalação
 echo -e "${YELLOW}🔧 Criando ambiente virtual com Python $(python3 --version)...${NC}"
-python3 -m venv .venv || {
-    echo -e "${RED}❌ Falha ao criar ambiente virtual com python3 -m venv.${NC}"
-    echo -e "${YELLOW}⚠️ Tentando método alternativo...${NC}"
-    
-    # Tenta usar o módulo virtualenv como alternativa
-    apt-get install -y python3-virtualenv
-    python3 -m virtualenv .venv || {
-        echo -e "${RED}❌ Falha ao criar ambiente virtual com virtualenv.${NC}"
-        echo -e "${YELLOW}⚠️ Tentando método com --without-pip...${NC}"
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS - criação de ambiente virtual mais simples
+    python3 -m venv .venv || {
+        echo -e "${RED}❌ Falha ao criar ambiente virtual no macOS.${NC}"
+        echo -e "${YELLOW}⚠️ Tentando método alternativo...${NC}"
         
-        # Tenta criar sem pip
-        python3 -m venv --without-pip .venv || {
+        # Tenta instalar virtualenv via pip e usar
+        pip3 install virtualenv
+        python3 -m virtualenv .venv || {
             echo -e "${RED}❌ Todas as tentativas de criar o ambiente virtual falharam.${NC}"
+            echo -e "${YELLOW}⚠️ Verifique se o Python está instalado corretamente no seu sistema.${NC}"
+            exit 1
+        }
+    }
+else
+    # Linux - tenta diferentes métodos
+    python3 -m venv .venv || {
+        echo -e "${RED}❌ Falha ao criar ambiente virtual com python3 -m venv.${NC}"
+        echo -e "${YELLOW}⚠️ Tentando método alternativo...${NC}"
+        
+        # Tenta usar o módulo virtualenv como alternativa
+        apt-get install -y python3-virtualenv
+        python3 -m virtualenv .venv || {
+            echo -e "${RED}❌ Falha ao criar ambiente virtual com virtualenv.${NC}"
+            echo -e "${YELLOW}⚠️ Tentando método com --without-pip...${NC}"
             
-            # Verifica a versão do Python para sugerir o pacote correto
-            PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+            # Tenta criar sem pip
+            python3 -m venv --without-pip .venv || {
+                echo -e "${RED}❌ Todas as tentativas de criar o ambiente virtual falharam.${NC}"
+                
+                # Verifica a versão do Python para sugerir o pacote correto
+                PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+                
+                echo -e "${YELLOW}Por favor, execute manualmente:${NC}"
+                echo -e "${GREEN}sudo apt update${NC}"
+                echo -e "${GREEN}sudo apt install -y python3-venv python${PYTHON_VERSION}-venv${NC}"
+                
+                # Mensagem específica para Python 3.8
+                if [[ "$PYTHON_VERSION" == "3.8" ]]; then
+                    echo -e "${GREEN}sudo apt install -y python3.8-venv python3.8-dev${NC}"
+                fi
+                
+                echo -e "${YELLOW}E tente novamente.${NC}"
+                
+                # Oferece a opção de continuar sem ambiente virtual
+                echo -e "${YELLOW}Deseja continuar a instalação sem ambiente virtual? (s/N)${NC}"
+                read -r response
+                if [[ "$response" =~ ^([sS][iI]|[sS])$ ]]; then
+                    echo -e "${YELLOW}⚠️ Continuando sem ambiente virtual. A instalação pode não funcionar corretamente.${NC}"
+                    mkdir -p .venv/bin
+                    echo "#!/bin/bash" > .venv/bin/activate
+                    echo "# Ambiente virtual simulado" >> .venv/bin/activate
+                    chmod +x .venv/bin/activate
+                else
+                    echo -e "${RED}❌ Instalação abortada.${NC}"
+                    exit 1
+                fi
+            }
             
-            echo -e "${YELLOW}Por favor, execute manualmente:${NC}"
-            echo -e "${GREEN}sudo apt update${NC}"
-            echo -e "${GREEN}sudo apt install -y python3-venv python${PYTHON_VERSION}-venv${NC}"
-            
-            # Mensagem específica para Python 3.8
-            if [[ "$PYTHON_VERSION" == "3.8" ]]; then
-                echo -e "${GREEN}sudo apt install -y python3.8-venv python3.8-dev${NC}"
-            fi
-            
-            echo -e "${YELLOW}E tente novamente.${NC}"
-            
-            # Oferece a opção de continuar sem ambiente virtual
-            echo -e "${YELLOW}Deseja continuar a instalação sem ambiente virtual? (s/N)${NC}"
-            read -r response
-            if [[ "$response" =~ ^([sS][iI]|[sS])$ ]]; then
-                echo -e "${YELLOW}⚠️ Continuando sem ambiente virtual. A instalação pode não funcionar corretamente.${NC}"
-                mkdir -p .venv/bin
-                echo "#!/bin/bash" > .venv/bin/activate
-                echo "# Ambiente virtual simulado" >> .venv/bin/activate
-                chmod +x .venv/bin/activate
-            else
-                echo -e "${RED}❌ Instalação abortada.${NC}"
-                exit 1
+            # Se criou sem pip, instala pip manualmente
+            if [ -f ".venv/bin/python3" ]; then
+                echo -e "${YELLOW}📦 Instalando pip no ambiente virtual...${NC}"
+                curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+                .venv/bin/python3 get-pip.py
+                rm get-pip.py
             fi
         }
-        
-        # Se criou sem pip, instala pip manualmente
-        if [ -f ".venv/bin/python3" ]; then
-            echo -e "${YELLOW}📦 Instalando pip no ambiente virtual...${NC}"
-            curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-            .venv/bin/python3 get-pip.py
-            rm get-pip.py
-        fi
     }
-}
+fi
 
 # Verifica se o ambiente virtual foi criado com sucesso
 if [ ! -f ".venv/bin/activate" ]; then
@@ -521,7 +572,20 @@ pip install --use-pep517 -e . || {
 }
 
 # Cria o wrapper script
-cat > "$WRAPPER_SCRIPT" << 'EOF'
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    cat > "$WRAPPER_SCRIPT" << EOF
+#!/bin/bash
+INSTALL_DIR="$INSTALL_DIR"
+VENV="\$INSTALL_DIR/.venv"
+
+# Ativa o ambiente virtual e executa o comando
+source "\$VENV/bin/activate"
+python3 -m jera_cli "\$@"
+EOF
+else
+    # Linux
+    cat > "$WRAPPER_SCRIPT" << 'EOF'
 #!/bin/bash
 INSTALL_DIR="/opt/jera-cli"
 VENV="$INSTALL_DIR/.venv"
@@ -530,6 +594,7 @@ VENV="$INSTALL_DIR/.venv"
 source "$VENV/bin/activate"
 python3 -m jera_cli "$@"
 EOF
+fi
 
 # Cria o link simbólico para o comando alternativo
 ln -s "$WRAPPER_SCRIPT" "$ALIAS_SCRIPT"
@@ -538,12 +603,21 @@ ln -s "$WRAPPER_SCRIPT" "$ALIAS_SCRIPT"
 chmod +x "$WRAPPER_SCRIPT"
 
 # Ajusta as permissões
-chown -R $(logname):$(logname) "$INSTALL_DIR"
-chown $(logname):$(logname) "$WRAPPER_SCRIPT"
-chown -h $(logname):$(logname) "$ALIAS_SCRIPT"
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    # Linux
+    chown -R $(logname):$(logname) "$INSTALL_DIR"
+    chown $(logname):$(logname) "$WRAPPER_SCRIPT"
+    chown -h $(logname):$(logname) "$ALIAS_SCRIPT"
+fi
 
 echo -e "\n${GREEN}✅ Jera CLI instalada com sucesso!${NC}"
-echo -e "${YELLOW}Os comandos ${GREEN}jeracli${YELLOW} e ${GREEN}jcli${YELLOW} agora estão disponíveis globalmente.${NC}"
+echo -e "${YELLOW}Os comandos ${GREEN}jeracli${YELLOW} e ${GREEN}jcli${YELLOW} agora estão disponíveis.${NC}"
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo -e "\n${YELLOW}⚠️ Para usar os comandos, certifique-se de que $HOME/.local/bin está no seu PATH:${NC}"
+    echo -e "${GREEN}source ~/.zshrc${NC} ${YELLOW}ou${NC} ${GREEN}source ~/.bash_profile${NC}"
+fi
+
 echo -e "\n${YELLOW}Para verificar a instalação:${NC}"
 echo -e "${GREEN}jeracli --version${NC}"
 echo -e "${GREEN}jcli --version${NC}"

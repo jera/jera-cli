@@ -8,21 +8,29 @@ NC='\033[0m'
 
 echo -e "${YELLOW}🗑️  Desinstalando Jera CLI...${NC}\n"
 
-# Verifica se está rodando como sudo
-if [ "$EUID" -ne 0 ]; then 
+# Verifica se está rodando como sudo no Linux, mas não no macOS
+if [[ "$OSTYPE" == "linux-gnu"* ]] && [ "$EUID" -ne 0 ]; then 
     echo -e "${YELLOW}⚠️  Executando com sudo para desinstalação...${NC}"
     sudo "$0" "$@"
     exit $?
 fi
 
-# Define os diretórios
-INSTALL_DIR="/opt/jera-cli"
-WRAPPER_SCRIPT="/usr/local/bin/jeracli"
-JCLI_LINK="/usr/local/bin/jcli"
+# Define os diretórios com base no sistema operacional
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS - diretórios no espaço do usuário
+    INSTALL_DIR="$HOME/.jera-cli"
+    WRAPPER_SCRIPT="$HOME/.local/bin/jeracli"
+    JCLI_LINK="$HOME/.local/bin/jcli"
+else
+    # Linux - diretórios globais
+    INSTALL_DIR="/opt/jera-cli"
+    WRAPPER_SCRIPT="/usr/local/bin/jeracli"
+    JCLI_LINK="/usr/local/bin/jcli"
+fi
 
 # Remove o comando global
 if [ -f "$WRAPPER_SCRIPT" ]; then
-    echo -e "${YELLOW}🗑️  Removendo comando global jeracli...${NC}"
+    echo -e "${YELLOW}🗑️  Removendo comando jeracli...${NC}"
     rm -f "$WRAPPER_SCRIPT"
 fi
 
