@@ -1,0 +1,20 @@
+import click
+from rich.console import Console
+from rich.table import Table
+import subprocess
+import json
+import yaml
+import os
+import inquirer
+from kubernetes import client, config
+from ..utils.kubernetes import check_aws_sso_config, check_aws_sso_session
+from ..utils.common import load_namespace
+
+console = Console()
+
+@click.command()
+@click.option('--cluster', '-c', help='Nome do cluster EKS para inicializar')
+@click.option('--region', '-r', default='us-east-1', help='Região AWS onde o cluster está localizado')
+@click.option('--profile', '-p', help='Profile AWS para usar')
+def init(cluster=None, region='us-east-1', profile=None):
+    """Inicializa a configuração do kubectl para um cluster EKS.""" 

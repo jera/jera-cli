@@ -2,12 +2,12 @@
 
 import click
 from rich.console import Console
-from .commands.pods import pods, logs, exec, pods_by_node, describe, delete
-from .commands.metrics import pod_metrics, all_metrics
-from .commands.config import init, use, login_aws, use_cluster, clusters, aws_login
-from .commands.nodes import nodes
-from .commands.namespaces import namespaces
-from .commands.ingress import url
+from .commands.commands import (
+    pods, logs, exec, pods_by_node, describe, delete,
+    pod_metrics, all_metrics,
+    init, use, login_aws, use_cluster, clusters,
+    nodes, namespaces, url
+)
 
 console = Console()
 
@@ -33,7 +33,6 @@ def cli(ctx):
       use-cluster   Alterna entre diferentes clusters Kubernetes
       clusters      Lista todos os clusters configurados
       login-aws     Faz login no AWS SSO de forma interativa
-      aws-login     Alias para o comando login-aws
     
     📊 Visualização:
       pods         Lista todos os pods no namespace atual
@@ -75,7 +74,6 @@ cli.add_command(use)
 cli.add_command(use_cluster)
 cli.add_command(clusters)
 cli.add_command(login_aws)
-cli.add_command(aws_login)
 cli.add_command(pods)
 cli.add_command(logs)
 cli.add_command(exec)
@@ -87,6 +85,9 @@ cli.add_command(describe)
 cli.add_command(namespaces)
 cli.add_command(url)
 cli.add_command(delete)
+
+# Adiciona aliases
+cli.add_command(login_aws, name='aws-login')
 
 if __name__ == '__main__':
     cli() 

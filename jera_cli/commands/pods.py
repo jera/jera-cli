@@ -7,19 +7,11 @@ import yaml
 import os
 from kubernetes import client, config
 from ..utils.kubernetes import format_age, get_pod_metrics, parse_resource_value
+from ..utils.common import load_namespace
 import subprocess
 import time
 
 console = Console()
-
-def load_namespace():
-    """Carrega o namespace salvo na configuração"""
-    config_path = os.path.expanduser('~/.jera/config')
-    if os.path.exists(config_path):
-        with open(config_path) as f:
-            config_data = yaml.safe_load(f) or {}
-            return config_data.get('namespace')
-    return None
 
 def generate_pods_table(v1, namespace):
     """Gera a tabela de pods para exibição"""
@@ -97,7 +89,8 @@ def pods(watch):
 @click.argument('pod_name', required=False)
 @click.option('-f', '--follow', is_flag=True, help='Acompanha os logs em tempo real')
 @click.option('-n', '--tail', type=int, default=None, help='Número de linhas para mostrar (do final)')
-def logs(pod_name=None, follow=False, tail=None):
+@click.option('-a', '--all', is_flag=True, help='Mostra logs de todos os pods')
+def logs(pod_name=None, follow=False, tail=None, all=False):
     """Visualiza logs de um pod no namespace atual."""
     try:
         namespace = load_namespace()
@@ -120,7 +113,7 @@ def logs(pod_name=None, follow=False, tail=None):
         
         selected_pod = pod_name
         
-        if not selected_pod:
+        if not selected_pod and not all:
             questions = [
                 inquirer.List('pod',
                              message="Selecione um pod para ver os logs",
@@ -134,7 +127,7 @@ def logs(pod_name=None, follow=False, tail=None):
             else:
                 return
         
-        if selected_pod not in pod_names:
+        if selected_pod and selected_pod not in pod_names:
             console.print(f"❌ Pod '{selected_pod}' não encontrado no namespace {namespace}.", style="bold red")
             return
             
@@ -146,9 +139,15 @@ def logs(pod_name=None, follow=False, tail=None):
         if tail is not None:
             cmd.extend(["--tail", str(tail)])
             
-        cmd.append(selected_pod)
-            
-        subprocess.run(cmd)
+        if all:
+            # Se a flag --all foi usada, mostra logs de todos os pods
+            for pod in pod_names:
+                console.print(f"\n📋 Logs do pod [bold cyan]{pod}[/]:", style="yellow")
+                pod_cmd = cmd + [pod]
+                subprocess.run(pod_cmd)
+        else:
+            cmd.append(selected_pod)
+            subprocess.run(cmd)
     except Exception as e:
         console.print(f"❌ Erro ao obter logs: {str(e)}", style="bold red")
 

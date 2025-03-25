@@ -1,15 +1,24 @@
 import click
 from rich.console import Console
-import inquirer
-import yaml
-import os
-from kubernetes import client, config
+from rich.table import Table
 import subprocess
 import json
-from rich.table import Table
+import yaml
+import os
+import inquirer
+from kubernetes import client, config
 from ..utils.kubernetes import check_aws_sso_config, check_aws_sso_session
-
+from ..utils.common import load_namespace
 console = Console()
+
+def load_namespace():
+    """Carrega o namespace salvo na configuração"""
+    config_path = os.path.expanduser('~/.jera/config')
+    if os.path.exists(config_path):
+        with open(config_path) as f:
+            config_data = yaml.safe_load(f) or {}
+            return config_data.get('namespace')
+    return None
 
 @click.command()
 @click.option('--cluster', '-c', help='Nome do cluster EKS para inicializar')
@@ -992,12 +1001,6 @@ def login_aws():
         console.print(f"\n❌ Erro ao fazer login: {str(e)}", style="bold red")
         if "The SSO session has expired" in str(e):
             console.print("A sessão SSO expirou. Tente novamente.", style="yellow")
-
-# Alias para o comando login-aws
-@click.command(name="aws-login")
-def aws_login():
-    """Alias para o comando 'login-aws'."""
-    return login_aws()
 
 @click.command(name="clusters")
 def clusters():
