@@ -3,7 +3,7 @@ from .metrics import pod_metrics, all_metrics
 from .config import init, use, login_aws, use_cluster, clusters
 from .nodes import nodes
 from .namespaces import namespaces
-from .ingress import url
+from .ingress import urls, loadbalancer
 
 __all__ = [
     'pods',
@@ -21,5 +21,6 @@ __all__ = [
     'clusters',
     'nodes',
     'namespaces',
-    'url'
+    'urls',
+    'loadbalancer'
 ] 

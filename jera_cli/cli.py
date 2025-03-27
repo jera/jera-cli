@@ -6,7 +6,7 @@ from .commands.commands import (
     pods, logs, exec, pods_by_node, describe, delete,
     pod_metrics, all_metrics,
     init, use, login_aws, use_cluster, clusters,
-    nodes, namespaces, url
+    nodes, namespaces, urls, loadbalancer
 )
 
 console = Console()
@@ -39,7 +39,9 @@ def cli(ctx):
       namespaces   Lista todos os namespaces disponíveis com status
       pod-metrics  Mostra análise detalhada de recursos dos pods
       all-metrics  Mostra análise detalhada de recursos de todos os pods
-      url          Mostra as URLs dos Ingresses no namespace
+      urls         Mostra as URLs dos Ingresses (todos os namespaces)
+      loadbalancer Mostra as URLs dos LoadBalancers (todos os namespaces)
+      lb           Alias para loadbalancer
     
     🔍 Operações em Pods:
       logs         Visualiza logs de um pod (com opção de follow)
@@ -59,7 +61,9 @@ def cli(ctx):
         $ jeracli pod-metrics     # Vê métricas dos pods
         $ jeracli logs           # Vê logs (interativo)
         $ jeracli exec meu-pod   # Acessa o pod
-        $ jeracli url            # Vê URLs dos Ingresses
+        $ jeracli urls            # Vê URLs dos Ingresses em todos os namespaces
+        $ jeracli urls -n prod    # Filtra por namespace específico
+        $ jeracli lb             # Vê URLs dos LoadBalancers (alias para loadbalancer)
     
     Use --help em qualquer comando para mais informações:
         $ jeracli init --help
@@ -83,11 +87,13 @@ cli.add_command(nodes)
 cli.add_command(pods_by_node)
 cli.add_command(describe)
 cli.add_command(namespaces)
-cli.add_command(url)
+cli.add_command(urls)
 cli.add_command(delete)
+cli.add_command(loadbalancer)
 
 # Adiciona aliases
 cli.add_command(login_aws, name='aws-login')
+cli.add_command(loadbalancer, name='lb')
 
 if __name__ == '__main__':
     cli() 
