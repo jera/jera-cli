@@ -65,7 +65,12 @@ jeracli exec
 - `logs`: Visualiza logs de pods
 - `exec`: Abre shell em pods
 - `describe`: Mostra detalhes de pods
-- `url`: Lista URLs de Ingresses
+- `urls`: Lista URLs de Ingresses
+- `loadbalancer`: Lista URLs dos LoadBalancers
+- `lb`: Alias para loadbalancer
+- `pvs`: Mostra Persistent Volumes
+- `pvcs`: Mostra Persistent Volume Claims
+- `storage`: Visão consolidada de armazenamento
 - `nodes`: Lista nós do cluster
 
 ## Desenvolvimento
@@ -162,11 +167,14 @@ jeracli pods
 
 ### Cenário 4: Verificando URLs de Ingress
 ```bash
-# Liste URLs de Ingress no namespace atual
-jeracli url
+# Liste URLs de Ingress em todos os namespaces
+jeracli urls
 
 # Liste URLs de Ingress em um namespace específico
-jeracli url staging
+jeracli urls -n staging
+
+# Liste URLs dos LoadBalancers
+jeracli lb
 ```
 
 ### Cenário 5: Análise de Recursos
@@ -187,7 +195,31 @@ jeracli nodes
 jeracli describe node meu-node-nome
 ```
 
-### Cenário 7: Deletando Pods
+### Cenário 7: Gerenciando Armazenamento
+```bash
+# Listar todos os Persistent Volumes do cluster
+jeracli pvs
+
+# Ver informações detalhadas dos PVs
+jeracli pvs -d
+
+# Listar Persistent Volume Claims em todos os namespaces
+jeracli pvcs
+
+# Listar PVCs em um namespace específico
+jeracli pvcs -n production
+
+# Selecionar um namespace interativamente
+jeracli pvcs -s
+
+# Ver visão consolidada de armazenamento
+jeracli storage
+
+# Ver visão detalhada com filtro por namespace
+jeracli storage -n production -d
+```
+
+### Cenário 8: Deletando Pods
 ```bash
 # Deleta um pod específico
 jeracli delete meu-pod

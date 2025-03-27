@@ -6,7 +6,8 @@ from .commands.commands import (
     pods, logs, exec, pods_by_node, describe, delete,
     pod_metrics, all_metrics,
     init, use, login_aws, use_cluster, clusters,
-    nodes, namespaces, urls, loadbalancer
+    nodes, namespaces, urls, loadbalancer,
+    pvs, pvcs, storage
 )
 
 console = Console()
@@ -43,9 +44,15 @@ def cli(ctx):
       loadbalancer Mostra as URLs dos LoadBalancers (todos os namespaces)
       lb           Alias para loadbalancer
     
+    💾 Armazenamento:
+      pvs          Mostra os Persistent Volumes do cluster
+      pvcs         Mostra os Persistent Volume Claims
+      storage      Mostra uma visão consolidada de armazenamento
+    
     🔍 Operações em Pods:
       logs         Visualiza logs de um pod (com opção de follow)
       exec         Abre um shell interativo dentro do pod
+      delete       Deleta um ou mais pods no namespace atual
     
     Fluxo básico de uso:
     
@@ -59,15 +66,17 @@ def cli(ctx):
     3. Gerencie seus recursos:
         $ jeracli pods            # Lista pods
         $ jeracli pod-metrics     # Vê métricas dos pods
-        $ jeracli logs           # Vê logs (interativo)
-        $ jeracli exec meu-pod   # Acessa o pod
+        $ jeracli logs            # Vê logs (interativo)
+        $ jeracli logs -a         # Vê logs de todos os pods
+        $ jeracli exec meu-pod    # Acessa o pod
         $ jeracli urls            # Vê URLs dos Ingresses em todos os namespaces
         $ jeracli urls -n prod    # Filtra por namespace específico
-        $ jeracli lb             # Vê URLs dos LoadBalancers (alias para loadbalancer)
+        $ jeracli lb              # Vê URLs dos LoadBalancers
+        $ jeracli pvcs            # Vê Persistent Volume Claims
     
     Use --help em qualquer comando para mais informações:
         $ jeracli init --help
-        $ jeracli logs --help
+        $ jeracli pvs --help
         etc.
     """
     ctx.obj = KubeContext()
@@ -90,6 +99,9 @@ cli.add_command(namespaces)
 cli.add_command(urls)
 cli.add_command(delete)
 cli.add_command(loadbalancer)
+cli.add_command(pvs)
+cli.add_command(pvcs)
+cli.add_command(storage)
 
 # Adiciona aliases
 cli.add_command(login_aws, name='aws-login')

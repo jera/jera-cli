@@ -4,6 +4,7 @@ from .config import init, use, login_aws, use_cluster, clusters
 from .nodes import nodes
 from .namespaces import namespaces
 from .ingress import urls, loadbalancer
+from .storage import pvs, pvcs, storage
 
 __all__ = [
     'pods',
@@ -22,5 +23,8 @@ __all__ = [
     'nodes',
     'namespaces',
     'urls',
-    'loadbalancer'
+    'loadbalancer',
+    'pvs',
+    'pvcs',
+    'storage'
 ] 
