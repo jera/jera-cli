@@ -7,7 +7,7 @@ from .commands.commands import (
     pod_metrics, all_metrics,
     init, use, login_aws, use_cluster, clusters,
     nodes, namespaces, urls, loadbalancer,
-    pvs, pvcs, storage
+    pvs, pvcs, storage, node_metrics
 )
 
 console = Console()
@@ -49,6 +49,11 @@ def cli(ctx):
       pvcs         Mostra os Persistent Volume Claims
       storage      Mostra uma visão consolidada de armazenamento
     
+    🖥️ Nós:
+      nodes        Lista todos os nós do cluster
+      describe     Mostra informações detalhadas de um nó específico
+      node-metrics Mostra métricas de utilização dos nós e top 5 pods
+    
     🔍 Operações em Pods:
       logs         Visualiza logs de um pod (com opção de follow)
       exec         Abre um shell interativo dentro do pod
@@ -73,6 +78,7 @@ def cli(ctx):
         $ jeracli urls -n prod    # Filtra por namespace específico
         $ jeracli lb              # Vê URLs dos LoadBalancers
         $ jeracli pvcs            # Vê Persistent Volume Claims
+        $ jeracli node-metrics    # Vê utilização de recursos nos nós
     
     Use --help em qualquer comando para mais informações:
         $ jeracli init --help
@@ -102,6 +108,7 @@ cli.add_command(loadbalancer)
 cli.add_command(pvs)
 cli.add_command(pvcs)
 cli.add_command(storage)
+cli.add_command(node_metrics)
 
 # Adiciona aliases
 cli.add_command(login_aws, name='aws-login')
