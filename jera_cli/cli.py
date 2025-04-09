@@ -26,64 +26,74 @@ def cli(ctx):
 
     Uma CLI para facilitar operações comuns no cluster Kubernetes da Jera.
     
+    \b
     Comandos Principais:
     
+    \b
     ⚡ Configuração:
-      init          Configura AWS SSO e kubectl para o cluster
-      use           Define o namespace atual para operações
-      use-cluster   Alterna entre diferentes clusters Kubernetes
-      clusters      Lista todos os clusters configurados
-      login-aws     Faz login no AWS SSO de forma interativa
+      init          Configura AWS SSO e kubectl para o cluster 
+      use           Define o namespace atual para operações 
+      use-cluster   Alterna entre diferentes clusters Kubernetes 
+      clusters      Lista todos os clusters configurados 
+      login-aws     Faz login no AWS SSO de forma interativa 
     
+    \b
     📊 Visualização:
-      pods         Lista todos os pods no namespace atual
-      namespaces   Lista todos os namespaces disponíveis com status
-      pod-metrics  Mostra análise detalhada de recursos dos pods
-      all-metrics  Mostra análise detalhada de recursos de todos os pods
-      urls         Mostra as URLs dos Ingresses (todos os namespaces)
-      loadbalancer Mostra as URLs dos LoadBalancers (todos os namespaces)
-      lb           Alias para loadbalancer
+      pods         Lista todos os pods no namespace atual 
+      namespaces   Lista todos os namespaces disponíveis com status 
+      pod-metrics  Mostra análise detalhada de recursos dos pods 
+      all-metrics  Mostra análise detalhada de recursos de todos os pods 
+      urls         Mostra as URLs dos Ingresses (todos os namespaces) 
+      loadbalancer Mostra as URLs dos LoadBalancers (todos os namespaces) 
+      lb           Alias para loadbalancer 
     
+    \b
     💾 Armazenamento:
-      pvs          Mostra os Persistent Volumes do cluster
-      pvcs         Mostra os Persistent Volume Claims
-      storage      Mostra uma visão consolidada de armazenamento
+      pvs          Mostra os Persistent Volumes do cluster 
+      pvcs         Mostra os Persistent Volume Claims 
+      storage      Mostra uma visão consolidada de armazenamento 
     
+    \b
     🖥️ Nós:
-      nodes        Lista todos os nós do cluster
-      describe     Mostra informações detalhadas de um nó específico
-      node-metrics Mostra métricas de utilização dos nós e top 5 pods
+      nodes        Lista todos os nós do cluster 
+      describe     Mostra informações detalhadas de um nó específico 
+      node-metrics Mostra métricas de utilização dos nós e top 5 pods 
     
+    \b
     🔍 Operações em Pods:
-      logs         Visualiza logs de um pod (com opção de follow)
-      exec         Abre um shell interativo dentro do pod
-      delete       Deleta um ou mais pods no namespace atual
+      logs         Visualiza logs de um pod (com opção de follow) 
+      exec         Abre um shell interativo dentro do pod 
+      delete       Deleta um ou mais pods no namespace atual 
     
-    Fluxo básico de uso:
+    \b
+    🔍 Fluxo básico de uso:
     
+    \b
     1. Configure suas credenciais:
-        $ jeracli login-aws    # Faz login no SSO
-        $ jeracli init         # Configura o kubectl
-    
+       $ jeracli login-aws    # Faz login no SSO 
+       $ jeracli init         # Configura o kubectl 
+    \b
     2. Selecione um namespace:
-        $ jeracli use production
+       $ jeracli use production 
     
+    \b
     3. Gerencie seus recursos:
-        $ jeracli pods            # Lista pods
-        $ jeracli pod-metrics     # Vê métricas dos pods
-        $ jeracli logs            # Vê logs (interativo)
-        $ jeracli logs -a         # Vê logs de todos os pods
-        $ jeracli exec meu-pod    # Acessa o pod
-        $ jeracli urls            # Vê URLs dos Ingresses em todos os namespaces
-        $ jeracli urls -n prod    # Filtra por namespace específico
-        $ jeracli lb              # Vê URLs dos LoadBalancers
-        $ jeracli pvcs            # Vê Persistent Volume Claims
-        $ jeracli node-metrics    # Vê utilização de recursos nos nós
+       $ jeracli pods            # Lista pods
+       $ jeracli pod-metrics     # Vê métricas dos pods
+       $ jeracli logs            # Vê logs (interativo)
+       $ jeracli logs -a         # Vê logs de todos os pods
+       $ jeracli exec meu-pod    # Acessa o pod
+       $ jeracli urls            # Vê URLs dos Ingresses em todos os namespaces
+       $ jeracli urls -n prod    # Filtra por namespace específico
+       $ jeracli lb              # Vê URLs dos LoadBalancers
+       $ jeracli pvcs            # Vê Persistent Volume Claims
+       $ jeracli node-metrics    # Vê utilização de recursos nos nós
     
+    \b
     Use --help em qualquer comando para mais informações:
-        $ jeracli init --help
-        $ jeracli pvs --help
-        etc.
+       $ jeracli init --help
+       $ jeracli pvs --help
+       etc.
     """
     ctx.obj = KubeContext()
 
