@@ -292,11 +292,11 @@ def init(cluster=None, region='us-east-1', profile=None):
             console.print("❌ Nome do cluster não informado.", style="bold red")
             return
         
-                # Tenta usar o profile para atualizar o kubeconfig
+        # Tenta usar o profile para atualizar o kubeconfig
         console.print(f"🔄 Atualizando kubeconfig para o cluster '{selected_cluster}' com profile '{selected_profile}'...", style="bold blue")
         try:
             update_result = subprocess.run([
-                    "aws", "eks", "update-kubeconfig",
+                "aws", "eks", "update-kubeconfig",
                 "--name", selected_cluster,
                 "--region", region,
                 "--profile", selected_profile
@@ -317,7 +317,7 @@ def init(cluster=None, region='us-east-1', profile=None):
                     console.print("\n⚠️ Token de acesso AWS expirado.", style="bold yellow")
                     console.print(f"\n📝 Renove sua sessão:", style="bold blue")
                     console.print(f"   aws sso login --profile {selected_profile}", style="bold green")
-        else:
+                else:
                     console.print(f"\nErro detalhado: {error_message}", style="dim red")
                 return
             
@@ -490,19 +490,19 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
         )
         profiles = result.stdout.strip().split('\n')
         
-        current_profile = profile
+        profile = profile
         
         # Se não foi fornecido um profile, mostra a lista interativa
-        if not current_profile:
+        if not profile:
             # Obtém o profile atual da configuração (se existir)
-            current_profile_from_config = None
+            profile_from_config = None
             if 'current_cluster' in config_data and 'profile' in config_data['current_cluster']:
-                current_profile_from_config = config_data['current_cluster']['profile']
+                profile_from_config = config_data['current_cluster']['profile']
             
             # Prepara as opções com o perfil atual destacado
             profile_choices = []
             for p in profiles:
-                if p == current_profile_from_config:
+                if p == profile_from_config:
                     profile_choices.append(f"{p} (atual)")
                 else:
                     profile_choices.append(p)
@@ -517,18 +517,18 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
             
             if answers:
                 # Remove o sufixo " (atual)" se presente
-                current_profile = answers['profile'].replace(" (atual)", "")
+                profile = answers['profile'].replace(" (atual)", "")
             else:
                 return
         
         # Lista os clusters disponíveis para o profile selecionado
-        console.print(f"🔍 Listando clusters EKS disponíveis com profile '{current_profile}'...", style="bold blue")
+        console.print(f"🔍 Listando clusters EKS disponíveis com profile '{profile}'...", style="bold blue")
         
         try:
             # Primeiro verifica se o usuário tem permissão para listar clusters do EKS
             test_cmd = [
                 "aws", "sts", "get-caller-identity",
-                "--profile", current_profile,
+                "--profile", profile,
                 "--region", region
             ]
             test_result = subprocess.run(
@@ -538,16 +538,16 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
             )
             
             if test_result.returncode != 0:
-                console.print(f"❌ Erro de autenticação com o profile '{current_profile}'", style="bold red")
+                console.print(f"❌ Erro de autenticação com o profile '{profile}'", style="bold red")
                 console.print("\n📝 Possíveis soluções:", style="bold yellow")
                 console.print("1. Verifique se a sessão SSO está ativa:", style="dim white")
-                console.print(f"   aws sso login --profile {current_profile}", style="bold green")
+                console.print(f"   aws sso login --profile {profile}", style="bold green")
                 console.print("2. Verifique se o profile tem as permissões necessárias para acessar o EKS", style="dim white")
                 console.print("3. Tente usar outro profile com permissões adequadas", style="dim white")
                 return
 
             result = subprocess.run(
-                ["aws", "eks", "list-clusters", "--region", region, "--profile", current_profile],
+                ["aws", "eks", "list-clusters", "--region", region, "--profile", profile],
                 capture_output=True,
                 text=True,
                 check=False
@@ -559,18 +559,18 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
                 
                 if "AccessDeniedException" in error_message or "UnauthorizedException" in error_message:
                     console.print("\n⚠️ O profile não tem permissão para listar clusters do EKS.", style="bold yellow")
-                    console.print(f"\n📝 Tente logar novamente com o profile '{current_profile}':", style="bold blue")
-                    console.print(f"   aws sso login --profile {current_profile}", style="bold green")
+                    console.print(f"\n📝 Tente logar novamente com o profile '{profile}':", style="bold blue")
+                    console.print(f"   aws sso login --profile {profile}", style="bold green")
                     console.print("\nOu forneça o nome do cluster diretamente:", style="bold blue")
-                    console.print(f"   jeracli use-cluster nome-do-cluster -p {current_profile}", style="bold green")
+                    console.print(f"   jeracli use-cluster nome-do-cluster -p {profile}", style="bold green")
                 elif "ExpiredToken" in error_message:
                     console.print("\n⚠️ Token de acesso AWS expirado.", style="bold yellow")
                     console.print(f"\n📝 Renove sua sessão:", style="bold blue")
-                    console.print(f"   aws sso login --profile {current_profile}", style="bold green")
+                    console.print(f"   aws sso login --profile {profile}", style="bold green")
                 else:
                     console.print(f"\nErro detalhado: {error_message}", style="dim red")
                     console.print("\n📝 Se você conhece o nome do cluster, pode fornecê-lo diretamente:", style="bold blue")
-                    console.print(f"   jeracli use-cluster nome-do-cluster -p {current_profile}", style="bold green")
+                    console.print(f"   jeracli use-cluster nome-do-cluster -p {profile}", style="bold green")
                 
                 # Questiona o usuário se deseja informar o nome do cluster manualmente
                 manual_cluster = click.prompt("Deseja informar o nome do cluster manualmente? [s/N]", default="n")
@@ -586,7 +586,7 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
                     available_clusters = clusters_data.get("clusters", [])
                     
                     if not available_clusters:
-                        console.print(f"❌ Nenhum cluster EKS encontrado na conta com profile '{current_profile}'.", style="bold red")
+                        console.print(f"❌ Nenhum cluster EKS encontrado na conta com profile '{profile}'.", style="bold red")
                         
                         # Questiona o usuário se deseja informar o nome do cluster manualmente
                         manual_cluster = click.prompt("Deseja informar o nome do cluster manualmente? [s/N]", default="n")
@@ -654,7 +654,7 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
         except Exception as e:
             console.print(f"❌ Erro ao listar ou selecionar clusters: {str(e)}", style="bold red")
             console.print("\n📝 Se você conhece o nome do cluster, pode fornecê-lo diretamente:", style="bold blue")
-            console.print(f"   jeracli use-cluster nome-do-cluster -p {current_profile}", style="bold green")
+            console.print(f"   jeracli use-cluster nome-do-cluster -p {profile}", style="bold green")
             
             # Questiona o usuário se deseja informar o nome do cluster manualmente
             manual_cluster = click.prompt("Deseja informar o nome do cluster manualmente? [s/N]", default="n")
@@ -667,24 +667,24 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
         
         # Faz login se necessário
         if not check_aws_sso_session():
-            console.print(f"\n🔑 Fazendo login com o profile [bold green]{current_profile}[/]...", style="bold blue")
+            console.print(f"\n🔑 Fazendo login com o profile [bold green]{profile}[/]...", style="bold blue")
             
             # Usa subprocess.run sem capturar a saída para manter o terminal interativo
             subprocess.run(
-                ["aws", "sso", "login", "--profile", current_profile],
+                ["aws", "sso", "login", "--profile", profile],
                 check=False  # Não lança exceção em caso de erro
             )
             
             # Verifica se o login foi bem-sucedido
             verify_result = subprocess.run(
-                ["aws", "sts", "get-caller-identity", "--profile", current_profile],
+                ["aws", "sts", "get-caller-identity", "--profile", profile],
                 capture_output=True,
                 text=True,
                 check=False
             )
             
             if verify_result.returncode != 0:
-                console.print(f"❌ Erro ao fazer login com o profile '{current_profile}'", style="bold red")
+                console.print(f"❌ Erro ao fazer login com o profile '{profile}'", style="bold red")
                 return
         
         # Continua apenas se temos um nome de cluster válido
@@ -700,7 +700,7 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
                 "aws", "eks", "update-kubeconfig",
                 "--name", cluster_name,
                 "--region", region,
-                "--profile", current_profile
+                "--profile", profile
             ], capture_output=True, text=True, check=False)
             
             if update_result.returncode != 0:
@@ -708,16 +708,16 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
                 console.print(f"❌ Erro ao atualizar kubeconfig:", style="bold red")
                 
                 if "ResourceNotFoundException" in error_message:
-                    console.print(f"\n⚠️ Cluster '{cluster_name}' não encontrado na conta com o profile '{current_profile}'.", style="bold yellow")
+                    console.print(f"\n⚠️ Cluster '{cluster_name}' não encontrado na conta com o profile '{profile}'.", style="bold yellow")
                     console.print("\n📝 Verifique se o nome do cluster está correto e se o profile tem acesso a ele.", style="bold blue")
                 elif "AccessDeniedException" in error_message or "UnauthorizedException" in error_message:
                     console.print("\n⚠️ O profile não tem permissão para acessar este cluster do EKS.", style="bold yellow")
-                    console.print(f"\n📝 Tente logar novamente com o profile '{current_profile}':", style="bold blue")
-                    console.print(f"   aws sso login --profile {current_profile}", style="bold green")
+                    console.print(f"\n📝 Tente logar novamente com o profile '{profile}':", style="bold blue")
+                    console.print(f"   aws sso login --profile {profile}", style="bold green")
                 elif "ExpiredToken" in error_message:
                     console.print("\n⚠️ Token de acesso AWS expirado.", style="bold yellow")
                     console.print(f"\n📝 Renove sua sessão:", style="bold blue")
-                    console.print(f"   aws sso login --profile {current_profile}", style="bold green")
+                    console.print(f"   aws sso login --profile {profile}", style="bold green")
                 else:
                     console.print(f"\nErro detalhado: {error_message}", style="dim red")
                 return
@@ -726,7 +726,7 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
             config_data['current_cluster'] = {
                 'name': cluster_name,
                 'region': region,
-                'profile': current_profile
+                'profile': profile
             }
             config_data['current_type'] = 'aws'
             
@@ -735,7 +735,7 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
             with open(config_path, 'w') as f:
                 yaml.dump(config_data, f)
             
-            console.print(f"✅ Cluster alterado para: [bold green]{cluster_name}[/] com profile [bold green]{current_profile}[/]", style="bold")
+            console.print(f"✅ Cluster alterado para: [bold green]{cluster_name}[/] com profile [bold green]{profile}[/]", style="bold")
             
             # Testa a conexão com o cluster
             test_cluster = subprocess.run(
@@ -795,7 +795,7 @@ def use_cluster_azure(cluster_name=None, resource_group=None, subscription=None,
                 return
         
         # Se não foi fornecido um cluster, lista os clusters disponíveis
-        selected_cluster = cluster_name
+        selected_cluster = cluster
         selected_resource_group = resource_group
         
         if not selected_cluster:
@@ -1055,18 +1055,18 @@ def login_aws():
                         console.print(f"\n🔑 Utilizando o profile [bold green]{profile}[/] para login...", style="bold blue")
                     else:
                         # Permite selecionar o profile
-            questions = [
+                        questions = [
                             inquirer.List('profile',
                                         message="Selecione o profile para login",
                                         choices=profiles,
                                         )
-            ]
-            answers = inquirer.prompt(questions)
-            
+                        ]
+                        answers = inquirer.prompt(questions)
+                        
                         if answers:
                             profile = answers['profile']
                         else:
-                return
+                            return
                 
                     # Executa o login AWS SSO
                     console.print(f"\n🔑 Fazendo login com o profile [bold green]{profile}[/]...", style="bold blue")
@@ -1091,7 +1091,6 @@ def login_aws():
                 else:
                     console.print("\n⚠️ Configuração AWS SSO não completada corretamente.", style="bold yellow")
                     return
-                    
             except subprocess.CalledProcessError:
                 console.print(f"❌ Erro ao configurar o AWS SSO.", style="bold red")
                 return
