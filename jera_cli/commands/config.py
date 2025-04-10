@@ -766,6 +766,13 @@ def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_
 def use_cluster_azure(cluster_name=None, resource_group=None, subscription=None, config_data=None, config_path=None):
     """Alterna para um cluster Azure AKS."""
     try:
+        # Carrega a configuração atual
+        config_path = os.path.expanduser('~/.jera/config')
+        config_data = {}
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config_data = yaml.safe_load(f) or {}
+                
         # Verifica se o Azure CLI está instalado
         if not check_azure_cli_installed():
             console.print("\n❌ Azure CLI não está instalado!", style="bold red")
@@ -795,7 +802,7 @@ def use_cluster_azure(cluster_name=None, resource_group=None, subscription=None,
                 return
         
         # Se não foi fornecido um cluster, lista os clusters disponíveis
-        selected_cluster = cluster
+        selected_cluster = cluster_name
         selected_resource_group = resource_group
         
         if not selected_cluster:
@@ -1320,6 +1327,13 @@ def login_azure():
 def init_azure(cluster=None, resource_group=None, subscription=None):
     """Inicializa a configuração do kubectl para um cluster AKS."""
     try:
+        # Carrega a configuração atual
+        config_path = os.path.expanduser('~/.jera/config')
+        config_data = {}
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config_data = yaml.safe_load(f) or {}
+                
         # Verifica se o Azure CLI está instalado
         if not check_azure_cli_installed():
             console.print("\n❌ Azure CLI não está instalado!", style="bold red")
