@@ -239,7 +239,7 @@ def loadbalancer(namespace=None):
             else:
                 console.print(f"❌ Erro ao obter Ingresses: {result.stderr}", style="bold red")
                 return
-        
+
         import json
         ingresses = json.loads(result.stdout)
         
@@ -250,7 +250,7 @@ def loadbalancer(namespace=None):
             else:
                 console.print(f"ℹ️ Nenhum Ingress encontrado no namespace '{selected_namespace}'.", style="bold yellow")
             return
-        
+
         # Cria a tabela para exibir os resultados
         table = Table(show_header=True, header_style="bold magenta")
         
@@ -341,6 +341,6 @@ def loadbalancer(namespace=None):
         
         # Nota adicional sobre HTTPS
         console.print("\nNota: As URLs são mostradas com https:// por padrão.", style="dim")
-            
+        
     except Exception as e:
         console.print(f"❌ Erro ao listar URLs dos LoadBalancers: {str(e)}", style="bold red") 

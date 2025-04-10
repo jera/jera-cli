@@ -292,11 +292,11 @@ def init(cluster=None, region='us-east-1', profile=None):
             console.print("❌ Nome do cluster não informado.", style="bold red")
             return
         
-        # Tenta usar o profile para atualizar o kubeconfig
+                # Tenta usar o profile para atualizar o kubeconfig
         console.print(f"🔄 Atualizando kubeconfig para o cluster '{selected_cluster}' com profile '{selected_profile}'...", style="bold blue")
         try:
             update_result = subprocess.run([
-                "aws", "eks", "update-kubeconfig",
+                    "aws", "eks", "update-kubeconfig",
                 "--name", selected_cluster,
                 "--region", region,
                 "--profile", selected_profile
@@ -317,7 +317,7 @@ def init(cluster=None, region='us-east-1', profile=None):
                     console.print("\n⚠️ Token de acesso AWS expirado.", style="bold yellow")
                     console.print(f"\n📝 Renove sua sessão:", style="bold blue")
                     console.print(f"   aws sso login --profile {selected_profile}", style="bold green")
-                else:
+        else:
                     console.print(f"\nErro detalhado: {error_message}", style="dim red")
                 return
             
@@ -431,8 +431,50 @@ def use(namespace=None):
 @click.argument('cluster_name', required=False)
 @click.option('--region', '-r', default='us-east-1', help='Região AWS onde o cluster está localizado')
 @click.option('--profile', '-p', help='Profile AWS para usar')
-def use_cluster(cluster_name=None, region='us-east-1', profile=None):
+@click.option('--azure', '-az', is_flag=True, help='Indica que o cluster está no Azure')
+@click.option('--aws', is_flag=True, help='Indica que o cluster está na AWS')
+@click.option('--switch', '-s', is_flag=True, help='Alterna entre AWS e Azure')
+@click.option('--resource-group', '-g', help='Grupo de recursos do cluster AKS (apenas para Azure)')
+@click.option('--subscription', '--sub', help='Assinatura Azure para usar (apenas para Azure)')
+def use_cluster(cluster_name=None, region='us-east-1', profile=None, azure=False, aws=False, switch=False, resource_group=None, subscription=None):
     """Alterna entre diferentes clusters Kubernetes."""
+    try:
+        # Carrega a configuração atual
+        config_path = os.path.expanduser('~/.jera/config')
+        config_data = {}
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                config_data = yaml.safe_load(f) or {}
+        
+        # Verifica o tipo atual de cluster configurado (aws ou azure)
+        current_type = config_data.get('current_type', 'aws')
+        
+        # Se a flag de troca está ativa, inverte o tipo atual
+        if switch:
+            is_azure = current_type != 'azure'  # Inverte o tipo atual
+            console.print(f"\n🔄 Alternando para {'Azure AKS' if is_azure else 'AWS EKS'}...", style="bold blue")
+        else:
+            # Senão, usa as flags ou mantém o tipo atual
+            if aws and azure:
+                console.print("❌ Não é possível usar as flags --aws e --azure ao mesmo tempo.", style="bold red")
+                return
+            elif aws:
+                is_azure = False
+            elif azure:
+                is_azure = True
+            else:
+                is_azure = current_type == 'azure'
+                
+        # Redireciona para o handler específico com base no tipo
+        if is_azure:
+            return use_cluster_azure(cluster_name, resource_group, subscription, config_data, config_path)
+        else:
+            return use_cluster_aws(cluster_name, region, profile, config_data, config_path)
+    except Exception as e:
+        console.print(f"❌ Erro ao alternar entre clusters: {str(e)}", style="bold red")
+
+def use_cluster_aws(cluster_name=None, region='us-east-1', profile=None, config_data=None, config_path=None):
+    """Alterna para um cluster AWS EKS."""
     try:
         # Verifica se tem uma sessão AWS ativa
         if not check_aws_sso_session():
@@ -447,13 +489,6 @@ def use_cluster(cluster_name=None, region='us-east-1', profile=None):
             text=True
         )
         profiles = result.stdout.strip().split('\n')
-        
-        # Carrega a configuração atual
-        config_path = os.path.expanduser('~/.jera/config')
-        config_data = {}
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                config_data = yaml.safe_load(f) or {}
         
         current_profile = profile
         
@@ -541,11 +576,10 @@ def use_cluster(cluster_name=None, region='us-east-1', profile=None):
                 manual_cluster = click.prompt("Deseja informar o nome do cluster manualmente? [s/N]", default="n")
                 if manual_cluster.lower() == "s":
                     selected_cluster = click.prompt("Digite o nome do cluster")
+                    # Define o argumento cluster_name para usar no restante do código
+                    cluster_name = selected_cluster
                 else:
                     return
-                    
-                # Define o argumento cluster_name para usar no restante do código
-                cluster_name = selected_cluster
             else:
                 try:
                     clusters_data = json.loads(result.stdout)
@@ -694,6 +728,7 @@ def use_cluster(cluster_name=None, region='us-east-1', profile=None):
                 'region': region,
                 'profile': current_profile
             }
+            config_data['current_type'] = 'aws'
             
             # Salva a configuração
             os.makedirs(os.path.expanduser('~/.jera'), exist_ok=True)
@@ -724,10 +759,185 @@ def use_cluster(cluster_name=None, region='us-east-1', profile=None):
             # Lista os clusters configurados após a alteração
             list_configured_clusters()
         except Exception as e:
-            console.print(f"❌ Erro ao alternar entre clusters: {str(e)}", style="bold red")
-            
+            console.print(f"❌ Erro ao alternar para o cluster: {str(e)}", style="bold red")
     except Exception as e:
-        console.print(f"❌ Erro ao alternar entre clusters: {str(e)}", style="bold red")
+        console.print(f"❌ Erro ao alternar para o cluster AWS: {str(e)}", style="bold red")
+    
+def use_cluster_azure(cluster_name=None, resource_group=None, subscription=None, config_data=None, config_path=None):
+    """Alterna para um cluster Azure AKS."""
+    try:
+        # Verifica se o Azure CLI está instalado
+        if not check_azure_cli_installed():
+            console.print("\n❌ Azure CLI não está instalado!", style="bold red")
+            console.print("\n📝 Para instalar o Azure CLI:", style="bold yellow")
+            console.print("1. Linux/MacOS:", style="dim")
+            console.print("   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash", style="bold green")
+            console.print("\n2. Windows:", style="dim")
+            console.print("   https://docs.microsoft.com/pt-br/cli/azure/install-azure-cli-windows", style="bold green")
+            console.print("\nInstale o Azure CLI e tente novamente.", style="bold yellow")
+            return
+        
+        # Verifica se tem uma sessão Azure ativa
+        if not check_azure_session():
+            console.print("\n⚠️  Você não tem uma sessão Azure ativa!", style="bold yellow")
+            console.print("\n📝 Use o comando 'jeracli login-azure' para fazer login primeiro.", style="bold blue")
+            return
+
+        # Verifica a assinatura atual
+        current_subscription = get_azure_current_subscription()
+        selected_subscription = subscription or current_subscription
+        
+        if subscription and subscription != current_subscription:
+            console.print(f"\n🔄 Mudando para a assinatura [bold blue]{selected_subscription}[/]...", style="bold blue")
+            
+            if not set_azure_subscription(selected_subscription):
+                console.print(f"❌ Erro ao alterar a assinatura.", style="bold red")
+                return
+        
+        # Se não foi fornecido um cluster, lista os clusters disponíveis
+        selected_cluster = cluster_name
+        selected_resource_group = resource_group
+        
+        if not selected_cluster:
+            console.print(f"\n🔍 Listando clusters AKS na assinatura [bold blue]{selected_subscription}[/]...", style="bold blue")
+            
+            try:
+                # Obtém todos os clusters com seus respectivos grupos de recursos
+                result = subprocess.run(
+                    ["az", "aks", "list", "--query", "[].{name:name, resourceGroup:resourceGroup}", "-o", "json"],
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result.returncode != 0:
+                    console.print(f"❌ Erro ao listar clusters AKS: {result.stderr}", style="bold red")
+                    return
+                
+                clusters = json.loads(result.stdout)
+                
+                if not clusters:
+                    console.print("❌ Não foram encontrados clusters AKS nesta assinatura.", style="bold red")
+                    return
+                
+                # Obtém o cluster atual da configuração (se existir)
+                current_cluster = None
+                current_resource_group = None
+                
+                if 'azure_cluster' in config_data:
+                    current_cluster = config_data['azure_cluster']
+                    current_resource_group = config_data.get('azure_resource_group')
+                
+                # Monta opções para o usuário selecionar
+                cluster_choices = []
+                for c in clusters:
+                    cluster_info = f"{c['name']} (Grupo: {c['resourceGroup']})"
+                    # Marca o cluster atual
+                    if c['name'] == current_cluster and c['resourceGroup'] == current_resource_group:
+                        cluster_choices.append(f"{cluster_info} (atual)")
+                    else:
+                        cluster_choices.append(cluster_info)
+                
+                questions = [
+                    inquirer.List('cluster',
+                                message="Selecione o cluster AKS",
+                                choices=cluster_choices,
+                                )
+                ]
+                answers = inquirer.prompt(questions)
+                
+                if not answers:
+                    return
+                
+                # Extrai o nome do cluster e o grupo de recursos da seleção
+                selected_option = answers['cluster'].replace(" (atual)", "")
+                
+                # Tenta encontrar o cluster e grupo de recursos correspondentes
+                found = False
+                for c in clusters:
+                    if selected_option == f"{c['name']} (Grupo: {c['resourceGroup']})":
+                        selected_cluster = c['name']
+                        selected_resource_group = c['resourceGroup']
+                        found = True
+                        break
+                
+                # Se não encontrou na forma exata, tenta extrair o nome e grupo diretamente
+                if not found:
+                    # Tenta extrair o nome e o grupo da string selecionada
+                    # Formato esperado: "nome-do-cluster (Grupo: nome-do-grupo)"
+                    import re
+                    match = re.match(r"([^(]+)\s*\(Grupo:\s*([^)]+)\)", selected_option)
+                    if match:
+                        selected_cluster = match.group(1).strip()
+                        selected_resource_group = match.group(2).strip()
+                    else:
+                        console.print("❌ Não foi possível extrair o nome do cluster e grupo de recursos da seleção.", style="bold red")
+                        return
+                
+            except Exception as e:
+                console.print(f"❌ Erro ao listar clusters Azure: {str(e)}", style="bold red")
+                return
+        
+        # Verifica se temos o grupo de recursos quando o cluster está definido
+        if selected_cluster and not selected_resource_group:
+            console.print("❌ Grupo de recursos não informado para o cluster Azure.", style="bold red")
+            console.print("📝 Você precisa fornecer o grupo de recursos para clusters AKS:", style="bold blue")
+            console.print(f"  jeracli use-cluster {selected_cluster} -az -g NOME_DO_GRUPO", style="bold green")
+            return
+        
+        # Configura kubectl para o cluster selecionado
+        console.print(f"\n🔄 Configurando kubectl para o cluster [bold green]{selected_cluster}[/]...", style="bold blue")
+        
+        success, stdout, stderr = get_aks_credentials(
+            selected_cluster, 
+            resource_group=selected_resource_group, 
+            subscription=selected_subscription
+        )
+        
+        if success:
+            # Atualiza a configuração
+            config_data['azure_cluster'] = selected_cluster
+            config_data['azure_resource_group'] = selected_resource_group
+            config_data['azure_subscription'] = selected_subscription
+            config_data['current_type'] = 'azure'
+            
+            # Salva a configuração
+            os.makedirs(os.path.expanduser('~/.jera'), exist_ok=True)
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
+            
+            console.print(f"✅ Cluster alterado para: [bold green]{selected_cluster}[/] (Azure AKS)", style="bold")
+            console.print(f"📊 Detalhes:", style="bold blue")
+            console.print(f"   Cluster: {selected_cluster}", style="dim")
+            console.print(f"   Grupo de recursos: {selected_resource_group}", style="dim")
+            console.print(f"   Assinatura: {selected_subscription}", style="dim")
+            
+            # Testa a conexão com o cluster
+            test_cluster = subprocess.run(
+                ["kubectl", "get", "nodes", "--request-timeout=5s"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            
+            if test_cluster.returncode != 0:
+                console.print("\n⚠️ A configuração foi atualizada, mas não foi possível conectar ao cluster.", style="bold yellow")
+                console.print("📝 Isso pode ocorrer por:", style="bold blue")
+                console.print("  • Problemas de conectividade de rede", style="dim white")
+                console.print("  • Problemas de autenticação", style="dim white")
+                console.print("  • Configurações adicionais podem ser necessárias", style="dim white")
+                console.print("\nTente usar o seguinte comando para verificar a conexão:", style="bold blue")
+                console.print("  kubectl get nodes", style="bold green")
+            else:
+                console.print("\n✅ Conexão com o cluster estabelecida com sucesso!", style="bold green")
+            
+            # Lista os clusters configurados após a alteração
+            list_configured_clusters()
+        else:
+            console.print(f"❌ Erro ao configurar o cluster: {stderr}", style="bold red")
+            return
+        
+    except Exception as e:
+        console.print(f"❌ Erro ao alternar para o cluster Azure: {str(e)}", style="bold red")
 
 def list_configured_clusters():
     """Lista todos os contextos de clusters configurados no kubeconfig."""
@@ -845,19 +1055,19 @@ def login_aws():
                         console.print(f"\n🔑 Utilizando o profile [bold green]{profile}[/] para login...", style="bold blue")
                     else:
                         # Permite selecionar o profile
-                        questions = [
+            questions = [
                             inquirer.List('profile',
                                         message="Selecione o profile para login",
                                         choices=profiles,
                                         )
-                        ]
-                        answers = inquirer.prompt(questions)
-                        
+            ]
+            answers = inquirer.prompt(questions)
+            
                         if answers:
                             profile = answers['profile']
                         else:
-                            return
-                    
+                return
+                
                     # Executa o login AWS SSO
                     console.print(f"\n🔑 Fazendo login com o profile [bold green]{profile}[/]...", style="bold blue")
                     
@@ -885,7 +1095,7 @@ def login_aws():
             except subprocess.CalledProcessError:
                 console.print(f"❌ Erro ao configurar o AWS SSO.", style="bold red")
                 return
-
+            
         else:
             # Lista os profiles disponíveis
             result = subprocess.run(
@@ -1002,7 +1212,7 @@ def login_aws():
     except Exception as e:
         console.print(f"\n❌ Erro ao fazer login: {str(e)}", style="bold red")
         if "The SSO session has expired" in str(e):
-            console.print("A sessão SSO expirou. Tente novamente.", style="yellow")
+            console.print("A sessão SSO expirou. Tente novamente.", style="yellow") 
 
 @click.command(name="clusters")
 def clusters():
@@ -1133,20 +1343,19 @@ def init_azure(cluster=None, resource_group=None, subscription=None):
         selected_subscription = subscription or current_subscription
         
         if subscription and subscription != current_subscription:
-            console.print(f"\n🔄 Mudando para a assinatura [bold blue]{subscription}[/]...", style="bold blue")
+            console.print(f"\n🔄 Mudando para a assinatura [bold blue]{selected_subscription}[/]...", style="bold blue")
             
-            if not set_azure_subscription(subscription):
+            if not set_azure_subscription(selected_subscription):
                 console.print(f"❌ Erro ao alterar a assinatura.", style="bold red")
                 return
         
-        # Se não foi fornecido cluster, lista os clusters disponíveis
+        # Se não foi fornecido um cluster, lista os clusters disponíveis
         selected_cluster = cluster
         selected_resource_group = resource_group
         
         if not selected_cluster:
             console.print(f"\n🔍 Listando clusters AKS na assinatura [bold blue]{selected_subscription}[/]...", style="bold blue")
             
-            # Primeiro precisamos obter os grupos de recursos e clusters
             try:
                 # Obtém todos os clusters com seus respectivos grupos de recursos
                 result = subprocess.run(
@@ -1159,21 +1368,35 @@ def init_azure(cluster=None, resource_group=None, subscription=None):
                     console.print(f"❌ Erro ao listar clusters AKS: {result.stderr}", style="bold red")
                     return
                 
-                import json
                 clusters = json.loads(result.stdout)
                 
                 if not clusters:
                     console.print("❌ Não foram encontrados clusters AKS nesta assinatura.", style="bold red")
                     return
                 
+                # Obtém o cluster atual da configuração (se existir)
+                current_cluster = None
+                current_resource_group = None
+                
+                if 'azure_cluster' in config_data:
+                    current_cluster = config_data['azure_cluster']
+                    current_resource_group = config_data.get('azure_resource_group')
+                
                 # Monta opções para o usuário selecionar
-                choices = [f"{c['name']} (Grupo: {c['resourceGroup']})" for c in clusters]
+                cluster_choices = []
+                for c in clusters:
+                    cluster_info = f"{c['name']} (Grupo: {c['resourceGroup']})"
+                    # Marca o cluster atual
+                    if c['name'] == current_cluster and c['resourceGroup'] == current_resource_group:
+                        cluster_choices.append(f"{cluster_info} (atual)")
+                    else:
+                        cluster_choices.append(cluster_info)
                 
                 questions = [
                     inquirer.List('cluster',
-                                 message="Selecione o cluster AKS",
-                                 choices=choices,
-                                 )
+                                message="Selecione o cluster AKS",
+                                choices=cluster_choices,
+                                )
                 ]
                 answers = inquirer.prompt(questions)
                 
@@ -1181,16 +1404,40 @@ def init_azure(cluster=None, resource_group=None, subscription=None):
                     return
                 
                 # Extrai o nome do cluster e o grupo de recursos da seleção
-                selected_option = answers['cluster']
+                selected_option = answers['cluster'].replace(" (atual)", "")
+                
+                # Tenta encontrar o cluster e grupo de recursos correspondentes
+                found = False
                 for c in clusters:
                     if selected_option == f"{c['name']} (Grupo: {c['resourceGroup']})":
                         selected_cluster = c['name']
                         selected_resource_group = c['resourceGroup']
+                        found = True
                         break
                 
+                # Se não encontrou na forma exata, tenta extrair o nome e grupo diretamente
+                if not found:
+                    # Tenta extrair o nome e o grupo da string selecionada
+                    # Formato esperado: "nome-do-cluster (Grupo: nome-do-grupo)"
+                    import re
+                    match = re.match(r"([^(]+)\s*\(Grupo:\s*([^)]+)\)", selected_option)
+                    if match:
+                        selected_cluster = match.group(1).strip()
+                        selected_resource_group = match.group(2).strip()
+                    else:
+                        console.print("❌ Não foi possível extrair o nome do cluster e grupo de recursos da seleção.", style="bold red")
+                        return
+                
             except Exception as e:
-                console.print(f"❌ Erro ao listar clusters: {str(e)}", style="bold red")
+                console.print(f"❌ Erro ao listar clusters Azure: {str(e)}", style="bold red")
                 return
+        
+        # Verifica se temos o grupo de recursos quando o cluster está definido
+        if selected_cluster and not selected_resource_group:
+            console.print("❌ Grupo de recursos não informado para o cluster Azure.", style="bold red")
+            console.print("📝 Você precisa fornecer o grupo de recursos para clusters AKS:", style="bold blue")
+            console.print(f"  jeracli use-cluster {selected_cluster} -az -g NOME_DO_GRUPO", style="bold green")
+            return
         
         # Configura kubectl para o cluster selecionado
         console.print(f"\n🔄 Configurando kubectl para o cluster [bold green]{selected_cluster}[/]...", style="bold blue")
@@ -1202,36 +1449,44 @@ def init_azure(cluster=None, resource_group=None, subscription=None):
         )
         
         if success:
-            console.print(f"✅ Cluster AKS configurado com sucesso!", style="bold green")
-            
-            # Salva a configuração para uso futuro
-            config_dir = os.path.expanduser('~/.jera')
-            os.makedirs(config_dir, exist_ok=True)
-            
-            config_path = os.path.join(config_dir, 'config')
-            config_data = {}
-            
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    config_data = yaml.safe_load(f) or {}
-            
             # Atualiza a configuração
             config_data['azure_cluster'] = selected_cluster
             config_data['azure_resource_group'] = selected_resource_group
             config_data['azure_subscription'] = selected_subscription
             config_data['current_type'] = 'azure'
             
+            # Salva a configuração
+            os.makedirs(os.path.expanduser('~/.jera'), exist_ok=True)
             with open(config_path, 'w') as f:
                 yaml.dump(config_data, f)
             
-            console.print(f"\n📝 Configuração salva:", style="bold green")
+            console.print(f"✅ Cluster alterado para: [bold green]{selected_cluster}[/] (Azure AKS)", style="bold")
+            console.print(f"📊 Detalhes:", style="bold blue")
             console.print(f"   Cluster: {selected_cluster}", style="dim")
             console.print(f"   Grupo de recursos: {selected_resource_group}", style="dim")
             console.print(f"   Assinatura: {selected_subscription}", style="dim")
             
-            console.print("\n🚀 Você já pode usar os comandos do Jera CLI com seu cluster AKS!", style="bold green")
-            console.print("   Use 'jeracli use <namespace>' para selecionar um namespace.", style="dim")
+            # Testa a conexão com o cluster
+            test_cluster = subprocess.run(
+                ["kubectl", "get", "nodes", "--request-timeout=5s"],
+                capture_output=True,
+                text=True,
+                check=False
+            )
             
+            if test_cluster.returncode != 0:
+                console.print("\n⚠️ A configuração foi atualizada, mas não foi possível conectar ao cluster.", style="bold yellow")
+                console.print("📝 Isso pode ocorrer por:", style="bold blue")
+                console.print("  • Problemas de conectividade de rede", style="dim white")
+                console.print("  • Problemas de autenticação", style="dim white")
+                console.print("  • Configurações adicionais podem ser necessárias", style="dim white")
+                console.print("\nTente usar o seguinte comando para verificar a conexão:", style="bold blue")
+                console.print("  kubectl get nodes", style="bold green")
+            else:
+                console.print("\n✅ Conexão com o cluster estabelecida com sucesso!", style="bold green")
+            
+            # Lista os clusters configurados após a alteração
+            list_configured_clusters()
         else:
             console.print(f"❌ Erro ao configurar o cluster: {stderr}", style="bold red")
             return

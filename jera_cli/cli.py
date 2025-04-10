@@ -35,7 +35,7 @@ def cli(ctx):
       init          Configura AWS SSO e kubectl para o cluster
       init-azure    Configura Azure CLI e kubectl para o cluster AKS
       use           Define o namespace atual para operações
-      use-cluster   Alterna entre diferentes clusters Kubernetes
+      use-cluster   Alterna entre diferentes clusters Kubernetes (AWS ou Azure)
       clusters      Lista todos os clusters configurados
       login-aws     Faz login no AWS SSO de forma interativa
       login-azure   Faz login no Azure de forma interativa
@@ -96,11 +96,19 @@ def cli(ctx):
        $ jeracli lb              # Vê URLs dos LoadBalancers
        $ jeracli pvcs            # Vê Persistent Volume Claims
        $ jeracli node-metrics    # Vê utilização de recursos nos nós
+       
+       # Alternar clusters:
+       $ jeracli use-cluster              # Usa o tipo atual (AWS ou Azure)
+       $ jeracli use-cluster -s           # Alterna entre AWS e Azure
+       $ jeracli use-cluster --aws        # Força o uso de clusters AWS
+       $ jeracli use-cluster -az          # Força o uso de clusters Azure
+       $ jeracli use-cluster my-cluster   # Usa cluster AWS específico
+       $ jeracli use-cluster my-aks -az -g my-group  # Usa cluster Azure específico
     
     \b
     Use --help em qualquer comando para mais informações:
        $ jeracli init --help
-       $ jeracli pvs --help
+       $ jeracli use-cluster --help
        etc.
     """
     ctx.obj = KubeContext()

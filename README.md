@@ -1,6 +1,8 @@
+![Jera Logo](https://jera.com.br/images/logo-jera-light.svg)
+
 # Jera CLI 🚀
 
-Uma CLI simplificada para gerenciar recursos da Jera na AWS.
+Uma CLI simplificada para gerenciar recursos de Kubernetes na AWS e Azure.
 
 ## Instalação Rápida
 
@@ -19,22 +21,46 @@ cd jera-cli
 
 ## Uso Básico
 
-### 1. Login na AWS
+### Opção 1: AWS
 ```bash
 # Faça login no AWS SSO
 jeracli login-aws
+
+# Configure o acesso ao cluster EKS
+jeracli init
 ```
 
-### 2. Inicialização do Kubectl
+### Opção 2: Azure
 ```bash
-# Configure o acesso ao cluster
-jeracli init
+# Faça login no Azure
+jeracli login-azure
+
+# Configure o acesso ao cluster AKS
+jeracli init-azure
 ```
 
 ### 3. Selecionar Namespace
 ```bash
 # Escolha um namespace para trabalhar
 jeracli use production
+```
+
+### Alternando entre Clusters
+```bash
+# Liste todos os clusters configurados
+jeracli clusters
+
+# Alterne para outro cluster (AWS ou Azure)
+jeracli use-cluster
+
+# Alterne explicitamente entre AWS e Azure
+jeracli use-cluster -s
+
+# Escolha um cluster AWS específico
+jeracli use-cluster meu-cluster-aws
+
+# Escolha um cluster Azure específico
+jeracli use-cluster meu-cluster-aks -az -g meu-grupo-recursos
 ```
 
 ### Comandos Principais
@@ -59,7 +85,11 @@ jeracli exec
 
 ## Comandos Disponíveis
 
-- `init`: Configura AWS SSO e kubectl
+- `login-aws`: Faz login no AWS SSO interativamente
+- `login-azure`: Faz login no Azure interativamente
+- `init`: Configura AWS SSO e kubectl para cluster EKS
+- `init-azure`: Configura kubectl para cluster AKS
+- `use-cluster`: Alterna entre clusters (AWS EKS ou Azure AKS)
 - `use`: Define namespace atual
 - `pods`: Lista pods
 - `logs`: Visualiza logs de pods
@@ -72,6 +102,7 @@ jeracli exec
 - `pvcs`: Mostra Persistent Volume Claims
 - `storage`: Visão consolidada de armazenamento
 - `nodes`: Lista nós do cluster
+- `node-metrics`: Mostra métricas de utilização dos nós
 
 ## Desenvolvimento
 
@@ -184,6 +215,12 @@ jeracli pod-metrics
 
 # Veja métricas de pods em um namespace específico
 jeracli pod-metrics production
+
+# Veja métricas dos nós do cluster
+jeracli node-metrics
+
+# Veja métricas de um nó específico
+jeracli node-metrics nome-do-no
 ```
 
 ### Cenário 6: Visualizando Nós do Cluster
@@ -237,10 +274,37 @@ jeracli delete --all
 jeracli delete --all --force
 ```
 
+### Cenário 9: Trabalhando com Múltiplos Clusters
+```bash
+# AWS EKS
+jeracli login-aws
+jeracli init
+
+# Azure AKS
+jeracli login-azure
+jeracli init-azure
+
+# Alternar entre os clusters configurados
+jeracli use-cluster
+
+# Alternar explicitamente entre AWS e Azure
+jeracli use-cluster -s
+
+# Forçar o uso de Azure
+jeracli use-cluster -az
+
+# Forçar o uso de AWS
+jeracli use-cluster --aws
+
+# Especificar um cluster Azure com seu grupo de recursos
+jeracli use-cluster meu-cluster-aks -az -g meu-grupo-recursos
+```
+
 ### Dicas Adicionais
 - Use `jeracli --help` para ver todos os comandos disponíveis
 - Adicione `-h` ou `--help` após qualquer comando para ver opções específicas
   ```bash
   jeracli pods --help
   jeracli logs --help
+  jeracli use-cluster --help
   ```
