@@ -7,7 +7,8 @@ from .commands.commands import (
     pod_metrics, all_metrics,
     init, use, login_aws, use_cluster, clusters,
     nodes, namespaces, urls, loadbalancer,
-    pvs, pvcs, storage, node_metrics
+    pvs, pvcs, storage, node_metrics,
+    login_azure, init_azure
 )
 
 console = Console()
@@ -31,50 +32,57 @@ def cli(ctx):
     
     \b
     ⚡ Configuração:
-      init          Configura AWS SSO e kubectl para o cluster 
-      use           Define o namespace atual para operações 
-      use-cluster   Alterna entre diferentes clusters Kubernetes 
-      clusters      Lista todos os clusters configurados 
-      login-aws     Faz login no AWS SSO de forma interativa 
+      init          Configura AWS SSO e kubectl para o cluster
+      init-azure    Configura Azure CLI e kubectl para o cluster AKS
+      use           Define o namespace atual para operações
+      use-cluster   Alterna entre diferentes clusters Kubernetes
+      clusters      Lista todos os clusters configurados
+      login-aws     Faz login no AWS SSO de forma interativa
+      login-azure   Faz login no Azure de forma interativa
     
     \b
     📊 Visualização:
-      pods         Lista todos os pods no namespace atual 
-      namespaces   Lista todos os namespaces disponíveis com status 
-      pod-metrics  Mostra análise detalhada de recursos dos pods 
-      all-metrics  Mostra análise detalhada de recursos de todos os pods 
-      urls         Mostra as URLs dos Ingresses (todos os namespaces) 
-      loadbalancer Mostra as URLs dos LoadBalancers (todos os namespaces) 
-      lb           Alias para loadbalancer 
+      pods         Lista todos os pods no namespace atual
+      namespaces   Lista todos os namespaces disponíveis com status
+      pod-metrics  Mostra análise detalhada de recursos dos pods
+      all-metrics  Mostra análise detalhada de recursos de todos os pods
+      urls         Mostra as URLs dos Ingresses (todos os namespaces)
+      loadbalancer Mostra as URLs dos LoadBalancers (todos os namespaces)
+      lb           Alias para loadbalancer
     
     \b
     💾 Armazenamento:
-      pvs          Mostra os Persistent Volumes do cluster 
-      pvcs         Mostra os Persistent Volume Claims 
-      storage      Mostra uma visão consolidada de armazenamento 
+      pvs          Mostra os Persistent Volumes do cluster
+      pvcs         Mostra os Persistent Volume Claims
+      storage      Mostra uma visão consolidada de armazenamento
     
     \b
     🖥️ Nós:
-      nodes        Lista todos os nós do cluster 
-      describe     Mostra informações detalhadas de um nó específico 
-      node-metrics Mostra métricas de utilização dos nós e top 5 pods 
+      nodes        Lista todos os nós do cluster
+      describe     Mostra informações detalhadas de um nó específico
+      node-metrics Mostra métricas de utilização dos nós e top 5 pods
     
     \b
     🔍 Operações em Pods:
-      logs         Visualiza logs de um pod (com opção de follow) 
-      exec         Abre um shell interativo dentro do pod 
-      delete       Deleta um ou mais pods no namespace atual 
+      logs         Visualiza logs de um pod (com opção de follow)
+      exec         Abre um shell interativo dentro do pod
+      delete       Deleta um ou mais pods no namespace atual
     
     \b
-    🔍 Fluxo básico de uso:
+    Fluxo básico de uso:
     
     \b
     1. Configure suas credenciais:
-       $ jeracli login-aws    # Faz login no SSO 
-       $ jeracli init         # Configura o kubectl 
+       $ jeracli login-aws    # Faz login no SSO
+       $ jeracli init         # Configura o kubectl
+       
+       # Ou para Azure:
+       $ jeracli login-azure  # Faz login no Azure
+       $ jeracli init-azure   # Configura o kubectl para AKS
+    
     \b
     2. Selecione um namespace:
-       $ jeracli use production 
+       $ jeracli use production
     
     \b
     3. Gerencie seus recursos:
@@ -103,6 +111,8 @@ cli.add_command(use)
 cli.add_command(use_cluster)
 cli.add_command(clusters)
 cli.add_command(login_aws)
+cli.add_command(login_azure)
+cli.add_command(init_azure)
 cli.add_command(pods)
 cli.add_command(logs)
 cli.add_command(exec)
@@ -122,6 +132,7 @@ cli.add_command(node_metrics)
 
 # Adiciona aliases
 cli.add_command(login_aws, name='aws-login')
+cli.add_command(login_azure, name='azure-login')
 cli.add_command(loadbalancer, name='lb')
 
 if __name__ == '__main__':

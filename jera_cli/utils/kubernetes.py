@@ -76,6 +76,104 @@ def check_aws_sso_session():
         console.print(f"Erro ao verificar sessão SSO: {str(e)}", style="dim red")
         return False
 
+def check_azure_cli_installed():
+    """Verifica se o Azure CLI está instalado"""
+    try:
+        result = subprocess.run(["az", "--version"], capture_output=True, text=True)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+def check_azure_session():
+    """Verifica se há uma sessão Azure ativa"""
+    try:
+        result = subprocess.run(
+            ["az", "account", "show"],
+            capture_output=True,
+            text=True
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+def get_azure_subscriptions():
+    """Obtém a lista de assinaturas do Azure"""
+    try:
+        result = subprocess.run(
+            ["az", "account", "list", "--query", "[].name", "-o", "tsv"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            return result.stdout.strip().split('\n')
+        return []
+    except Exception:
+        return []
+
+def get_azure_current_subscription():
+    """Obtém a assinatura atual do Azure"""
+    try:
+        result = subprocess.run(
+            ["az", "account", "show", "--query", "name", "-o", "tsv"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+        return None
+    except Exception:
+        return None
+
+def get_azure_clusters(subscription=None):
+    """Obtém a lista de clusters AKS do Azure"""
+    try:
+        cmd = ["az", "aks", "list", "--query", "[].name", "-o", "tsv"]
+        if subscription:
+            cmd.extend(["--subscription", subscription])
+            
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            return result.stdout.strip().split('\n')
+        return []
+    except Exception:
+        return []
+
+def set_azure_subscription(subscription):
+    """Define a assinatura atual do Azure"""
+    try:
+        result = subprocess.run(
+            ["az", "account", "set", "--subscription", subscription],
+            capture_output=True,
+            text=True
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+def get_aks_credentials(cluster_name, resource_group=None, subscription=None):
+    """Obtém as credenciais para um cluster AKS"""
+    try:
+        cmd = ["az", "aks", "get-credentials", "--name", cluster_name, "--overwrite-existing"]
+        
+        if resource_group:
+            cmd.extend(["--resource-group", resource_group])
+            
+        if subscription:
+            cmd.extend(["--subscription", subscription])
+            
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True
+        )
+        return result.returncode == 0, result.stdout, result.stderr
+    except Exception as e:
+        return False, "", str(e)
+
 def get_current_cluster_info():
     """Obtém informações do cluster atual configurado no Jera CLI"""
     try:

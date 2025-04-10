@@ -7,7 +7,7 @@ import yaml
 import os
 import inquirer
 from kubernetes import client, config
-from ..utils.kubernetes import check_aws_sso_config, check_aws_sso_session
+from ..utils.kubernetes import check_aws_sso_config, check_aws_sso_session, check_azure_cli_installed, check_azure_session, get_azure_subscriptions, get_azure_current_subscription, set_azure_subscription, get_azure_clusters, get_aks_credentials
 from ..utils.common import load_namespace
 console = Console()
 
@@ -272,6 +272,7 @@ def init(cluster=None, region='us-east-1', profile=None):
                         manual_cluster = click.prompt("Deseja informar o nome do cluster manualmente? [s/N]", default="n")
                         if manual_cluster.lower() == "s":
                             selected_cluster = click.prompt("Digite o nome do cluster")
+                            return
                         else:
                             return
             except Exception as e:
@@ -283,6 +284,7 @@ def init(cluster=None, region='us-east-1', profile=None):
                 manual_cluster = click.prompt("Deseja informar o nome do cluster manualmente? [s/N]", default="n")
                 if manual_cluster.lower() == "s":
                     selected_cluster = click.prompt("Digite o nome do cluster")
+                    return
                 else:
                     return
         
@@ -1005,4 +1007,234 @@ def login_aws():
 @click.command(name="clusters")
 def clusters():
     """Lista todos os clusters Kubernetes configurados."""
-    list_configured_clusters() 
+    list_configured_clusters()
+
+@click.command(name="login-azure")
+def login_azure():
+    """Faz login no Azure CLI de forma interativa."""
+    try:
+        # Verifica se o Azure CLI está instalado
+        if not check_azure_cli_installed():
+            console.print("\n❌ Azure CLI não está instalado!", style="bold red")
+            console.print("\n📝 Para instalar o Azure CLI:", style="bold yellow")
+            console.print("1. Linux/MacOS:", style="dim")
+            console.print("   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash", style="bold green")
+            console.print("\n2. Windows:", style="dim")
+            console.print("   https://docs.microsoft.com/pt-br/cli/azure/install-azure-cli-windows", style="bold green")
+            console.print("\nInstale o Azure CLI e tente novamente.", style="bold yellow")
+            return
+
+        # Verifica se já existe uma sessão ativa
+        if check_azure_session():
+            current_subscription = get_azure_current_subscription()
+            subscriptions = get_azure_subscriptions()
+            
+            console.print(f"\n✅ Você já está logado no Azure!", style="bold green")
+            console.print(f"🔹 Assinatura atual: [bold blue]{current_subscription}[/]", style="dim")
+            
+            # Pergunta se quer mudar a assinatura
+            choices = ["Continuar com a assinatura atual"] + subscriptions
+            
+            questions = [
+                inquirer.List('subscription',
+                             message="Deseja mudar a assinatura?",
+                             choices=choices,
+                             default="Continuar com a assinatura atual"
+                             )
+            ]
+            answers = inquirer.prompt(questions)
+            
+            if answers and answers['subscription'] != "Continuar com a assinatura atual":
+                subscription = answers['subscription']
+                console.print(f"\n🔄 Mudando para a assinatura [bold blue]{subscription}[/]...", style="bold blue")
+                
+                if set_azure_subscription(subscription):
+                    console.print(f"✅ Assinatura alterada com sucesso!", style="bold green")
+                else:
+                    console.print(f"❌ Erro ao alterar a assinatura.", style="bold red")
+                    return
+            
+            return
+        
+        # Executa o login no Azure
+        console.print("\n🔑 Iniciando login no Azure...", style="bold blue")
+        console.print("Um navegador será aberto para você fazer login.", style="dim white")
+        
+        subprocess.run(
+            ["az", "login"],
+            check=False  # Não lança exceção em caso de erro
+        )
+        
+        # Verifica se o login foi bem-sucedido
+        if check_azure_session():
+            console.print("\n✅ Login realizado com sucesso!", style="bold green")
+            
+            # Lista as assinaturas e permite selecionar
+            subscriptions = get_azure_subscriptions()
+            current = get_azure_current_subscription()
+            
+            if len(subscriptions) > 1:
+                console.print(f"\nAssinatura atual: [bold blue]{current}[/]", style="dim")
+                
+                questions = [
+                    inquirer.List('subscription',
+                                 message="Selecione a assinatura que deseja usar",
+                                 choices=subscriptions,
+                                 default=current
+                                 )
+                ]
+                answers = inquirer.prompt(questions)
+                
+                if answers and answers['subscription'] != current:
+                    subscription = answers['subscription']
+                    console.print(f"\n🔄 Mudando para a assinatura [bold blue]{subscription}[/]...", style="bold blue")
+                    
+                    if set_azure_subscription(subscription):
+                        console.print(f"✅ Assinatura alterada com sucesso!", style="bold green")
+                    else:
+                        console.print(f"❌ Erro ao alterar a assinatura.", style="bold red")
+                        return
+            
+            console.print("\n📋 Agora você pode usar os comandos 'init-azure' para configurar seu cluster AKS.", style="bold blue")
+            
+        else:
+            console.print("\n❌ Falha ao fazer login no Azure.", style="bold red")
+            return
+        
+    except Exception as e:
+        console.print(f"\n❌ Erro ao fazer login: {str(e)}", style="bold red")
+
+@click.command(name="init-azure")
+@click.option('--cluster', '-c', help='Nome do cluster AKS para inicializar')
+@click.option('--resource-group', '-g', help='Grupo de recursos do cluster AKS')
+@click.option('--subscription', '-s', help='Assinatura Azure para usar')
+def init_azure(cluster=None, resource_group=None, subscription=None):
+    """Inicializa a configuração do kubectl para um cluster AKS."""
+    try:
+        # Verifica se o Azure CLI está instalado
+        if not check_azure_cli_installed():
+            console.print("\n❌ Azure CLI não está instalado!", style="bold red")
+            console.print("\n📝 Para instalar o Azure CLI:", style="bold yellow")
+            console.print("1. Linux/MacOS:", style="dim")
+            console.print("   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash", style="bold green")
+            console.print("\n2. Windows:", style="dim")
+            console.print("   https://docs.microsoft.com/pt-br/cli/azure/install-azure-cli-windows", style="bold green")
+            console.print("\nInstale o Azure CLI e tente novamente.", style="bold yellow")
+            return
+
+        # Verifica se tem uma sessão Azure ativa
+        if not check_azure_session():
+            console.print("\n⚠️  Você não tem uma sessão Azure ativa!", style="bold yellow")
+            console.print("\n📝 Use o comando 'jeracli login-azure' para fazer login primeiro.", style="bold blue")
+            return
+
+        # Verifica a assinatura atual
+        current_subscription = get_azure_current_subscription()
+        selected_subscription = subscription or current_subscription
+        
+        if subscription and subscription != current_subscription:
+            console.print(f"\n🔄 Mudando para a assinatura [bold blue]{subscription}[/]...", style="bold blue")
+            
+            if not set_azure_subscription(subscription):
+                console.print(f"❌ Erro ao alterar a assinatura.", style="bold red")
+                return
+        
+        # Se não foi fornecido cluster, lista os clusters disponíveis
+        selected_cluster = cluster
+        selected_resource_group = resource_group
+        
+        if not selected_cluster:
+            console.print(f"\n🔍 Listando clusters AKS na assinatura [bold blue]{selected_subscription}[/]...", style="bold blue")
+            
+            # Primeiro precisamos obter os grupos de recursos e clusters
+            try:
+                # Obtém todos os clusters com seus respectivos grupos de recursos
+                result = subprocess.run(
+                    ["az", "aks", "list", "--query", "[].{name:name, resourceGroup:resourceGroup}", "-o", "json"],
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result.returncode != 0:
+                    console.print(f"❌ Erro ao listar clusters AKS: {result.stderr}", style="bold red")
+                    return
+                
+                import json
+                clusters = json.loads(result.stdout)
+                
+                if not clusters:
+                    console.print("❌ Não foram encontrados clusters AKS nesta assinatura.", style="bold red")
+                    return
+                
+                # Monta opções para o usuário selecionar
+                choices = [f"{c['name']} (Grupo: {c['resourceGroup']})" for c in clusters]
+                
+                questions = [
+                    inquirer.List('cluster',
+                                 message="Selecione o cluster AKS",
+                                 choices=choices,
+                                 )
+                ]
+                answers = inquirer.prompt(questions)
+                
+                if not answers:
+                    return
+                
+                # Extrai o nome do cluster e o grupo de recursos da seleção
+                selected_option = answers['cluster']
+                for c in clusters:
+                    if selected_option == f"{c['name']} (Grupo: {c['resourceGroup']})":
+                        selected_cluster = c['name']
+                        selected_resource_group = c['resourceGroup']
+                        break
+                
+            except Exception as e:
+                console.print(f"❌ Erro ao listar clusters: {str(e)}", style="bold red")
+                return
+        
+        # Configura kubectl para o cluster selecionado
+        console.print(f"\n🔄 Configurando kubectl para o cluster [bold green]{selected_cluster}[/]...", style="bold blue")
+        
+        success, stdout, stderr = get_aks_credentials(
+            selected_cluster, 
+            resource_group=selected_resource_group, 
+            subscription=selected_subscription
+        )
+        
+        if success:
+            console.print(f"✅ Cluster AKS configurado com sucesso!", style="bold green")
+            
+            # Salva a configuração para uso futuro
+            config_dir = os.path.expanduser('~/.jera')
+            os.makedirs(config_dir, exist_ok=True)
+            
+            config_path = os.path.join(config_dir, 'config')
+            config_data = {}
+            
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config_data = yaml.safe_load(f) or {}
+            
+            # Atualiza a configuração
+            config_data['azure_cluster'] = selected_cluster
+            config_data['azure_resource_group'] = selected_resource_group
+            config_data['azure_subscription'] = selected_subscription
+            config_data['current_type'] = 'azure'
+            
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
+            
+            console.print(f"\n📝 Configuração salva:", style="bold green")
+            console.print(f"   Cluster: {selected_cluster}", style="dim")
+            console.print(f"   Grupo de recursos: {selected_resource_group}", style="dim")
+            console.print(f"   Assinatura: {selected_subscription}", style="dim")
+            
+            console.print("\n🚀 Você já pode usar os comandos do Jera CLI com seu cluster AKS!", style="bold green")
+            console.print("   Use 'jeracli use <namespace>' para selecionar um namespace.", style="dim")
+            
+        else:
+            console.print(f"❌ Erro ao configurar o cluster: {stderr}", style="bold red")
+            return
+        
+    except Exception as e:
+        console.print(f"\n❌ Erro ao inicializar o cluster: {str(e)}", style="bold red") 

@@ -1,6 +1,6 @@
 from .pods import pods, logs, exec, pods_by_node, describe, delete
 from .metrics import pod_metrics, all_metrics
-from .config import init, use, login_aws, use_cluster, clusters
+from .config import init, use, login_aws, use_cluster, clusters, login_azure, init_azure
 from .nodes import nodes, describe, node_metrics
 from .namespaces import namespaces
 from .ingress import urls, loadbalancer
@@ -27,5 +27,7 @@ __all__ = [
     'pvs',
     'pvcs',
     'storage',
-    'node_metrics'
+    'node_metrics',
+    'login_azure',
+    'init_azure'
 ] 
