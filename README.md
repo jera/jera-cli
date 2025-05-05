@@ -63,6 +63,36 @@ jeracli use-cluster meu-cluster-aws
 jeracli use-cluster meu-cluster-aks -az -g meu-grupo-recursos
 ```
 
+## Comparação com kubectl
+
+A Jera CLi nasceu muito por que toda vez que precisavamos fazer algo entre namespaces tinhamos que toda hora escrever kubectl, o que para mim estava sendo horrivel ja que é um comando "muito" grande, além de ter que escrever '-n meu-namespace' quase toda hora....
+Dai a Jera CLI simplifica as operações diárias no Kubernetes, abstraindo a complexidade dos comandos do kubectl. Veja abaixo uma comparação dos comandos mais frequentes:
+
+| Funcionalidade               | Jera CLI                        | kubectl                                                    |
+|------------------------------|--------------------------------|-----------------------------------------------------------|
+| **Seleção de contexto**      | `jeracli use-cluster`          | `kubectl config use-context <context>`                    |
+| **Configuração de cluster AWS** | `jeracli init`              | `aws eks update-kubeconfig --name <cluster>`              |
+| **Configuração de cluster Azure** | `jeracli init-azure`      | `az aks get-credentials --resource-group <rg> --name <cluster>` |
+| **Seleção de namespace**     | `jeracli use <namespace>`      | `kubectl config set-context --current --namespace=<namespace>` |
+| **Listar pods**              | `jeracli pods`                 | `kubectl get pods`                                         |
+| **Ver logs de um pod**       | `jeracli logs <pod>`           | `kubectl logs <pod>`                                       |
+| **Executar shell em um pod** | `jeracli exec <pod>`           | `kubectl exec -it <pod> -- /bin/sh`                       |
+| **Ver detalhes de um pod**   | `jeracli describe <pod>`       | `kubectl describe pod <pod>`                              |
+| **Listar serviços**          | `jeracli loadbalancer` ou `lb` | `kubectl get svc`                                         |
+| **Listar ingresses**         | `jeracli urls`                 | `kubectl get ingress --all-namespaces`                    |
+| **Listar nós**               | `jeracli nodes`                | `kubectl get nodes`                                       |
+| **Ver métricas de nós**      | `jeracli node-metrics`         | `kubectl top nodes`                                       |
+| **Ver volumes persistentes** | `jeracli pvs`                  | `kubectl get pv`                                          |
+| **Ver claims de volumes**    | `jeracli pvcs`                 | `kubectl get pvc --all-namespaces`                        |
+
+### Principais vantagens da Jera CLI:
+
+- **Simplicidade**: Comandos mais curtos e intuitivos
+- **Interatividade**: Muitos comandos oferecem seleção interativa quando não especificados todos os parâmetros
+- **Integração com cloud**: Gerencia automaticamente a autenticação com AWS e Azure
+- **Comandos consolidados**: Agrega múltiplas operações kubectl em um único comando
+- **Visualização otimizada**: Saída formatada e focada nas informações mais relevantes
+
 ### Comandos Principais
 
 #### Listar Pods
