@@ -7,7 +7,7 @@ from .commands.commands import (
     pod_metrics, all_metrics,
     init, use, login_aws, use_cluster, clusters,
     nodes, namespaces, urls, loadbalancer,
-    pvs, pvcs, storage, node_metrics,
+    pvs, pvcs, storage, node_metrics, describe_node,
     login_azure, init_azure
 )
 
@@ -59,7 +59,8 @@ def cli(ctx):
     \b
     🖥️ Nós:
       nodes        Lista todos os nós do cluster
-      describe     Mostra informações detalhadas de um nó específico
+      describe     Mostra informações detalhadas de um pod específico
+      describe-node Mostra informações detalhadas de um nó específico
       node-metrics Mostra métricas de utilização dos nós e top 5 pods
     
     \b
@@ -129,6 +130,7 @@ cli.add_command(all_metrics)
 cli.add_command(nodes)
 cli.add_command(pods_by_node)
 cli.add_command(describe)
+cli.add_command(describe_node)
 cli.add_command(namespaces)
 cli.add_command(urls)
 cli.add_command(delete)

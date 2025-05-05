@@ -83,7 +83,7 @@ def nodes():
 
 @click.command()
 @click.argument('node_name', required=False)
-def describe(node_name=None):
+def describe_node(node_name=None):
     """Mostra informações detalhadas de um nó."""
     try:
         config.load_kube_config()
@@ -215,6 +215,13 @@ def describe(node_name=None):
         
     except Exception as e:
         console.print(f"❌ Erro ao descrever nó: {str(e)}", style="bold red")
+
+# Mantém o comando "describe" para compatibilidade com versões anteriores
+@click.command(name="describe")
+@click.argument('node_name', required=False)
+def describe(node_name=None):
+    """Alias para describe-node. Mostra informações detalhadas de um nó."""
+    return describe_node(node_name)
 
 @click.command(name="node-metrics")
 @click.argument('node_name', required=False)

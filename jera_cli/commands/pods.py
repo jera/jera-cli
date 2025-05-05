@@ -303,13 +303,8 @@ def describe(pod_name=None):
         $ jeracli describe meu-pod      # Mostra detalhes do pod especificado
     """
     try:
-        # Load saved namespace
-        config_path = os.path.expanduser('~/.jera/config')
-        if os.path.exists(config_path):
-            with open(config_path) as f:
-                config_data = yaml.safe_load(f)
-                namespace = config_data.get('namespace')
-        
+        # Carrega o namespace usando a função utilitária
+        namespace = load_namespace()
         if not namespace:
             console.print("❌ Namespace não definido. Use 'jeracli use <namespace>' primeiro.", style="bold red")
             return
